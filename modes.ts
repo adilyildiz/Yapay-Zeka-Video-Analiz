@@ -185,7 +185,7 @@ const modes: Record<string, Mode> = {
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,
     subModes: {
-      'Özel Kategoriler': '',
+      'Özel Kategoriler': 'fun, challenge, behavioural momentum, rewards, penalties, pavlovian interaction, urgent optimism, communal discovery, strategy/planning, story, cooperation, pareto optimal, feedback, protege effect, mini games, design/editing, realism, ownership, role play, virality, cascading information, collaboration, competition, cut scenes, action points, levels, tokens, question&answer, game turns, selecting/collecting, resource management, capture/eliminate, feedback, goods/information, time pressure, tutorial, tiles/grids, infinite gameplay, appointment, movement, assessment, status, simulate, response',
     },
   },
   'Görsel-İşitsel Altyazılar': {
