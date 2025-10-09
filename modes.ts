@@ -76,19 +76,39 @@ const modes: Record<string, Mode> = {
 
 ### Analiz Kuralları:
 - Sadece kullanıcının belirttiği kategorilerdeki olayları tespit et
-- **ZAMAN HASSASİYETİ:** Her olayın gerçek süresini dikkatli şekilde analiz et
-- **BAŞLANGIÇ-BİTİŞ SÜRELER:** Her olayın ekranda ne kadar süre kaldığını gözlemle
-- Anlık olaylar için bile 0.1-0.5 saniye gibi gerçekçi süreler kullan
-- Uzun süren olaylar (nesne görünümü, animasyon) için gerçek süreyi hesapla
-- **SANİYE ALTI HASSASIYET:** Zamanları milisaniye hassasiyetiyle (SS:DD:SS.mmm) belirt
-- Her kategoriyi AYRI AYRI gönder, birleştirme
+- **SÜRE HESAPLAMA ZORUNLULUĞU:** Her olayın gerçek başlangıç ve bitiş zamanını ayrı ayrı hesapla
+- **ASLA AYNI ZAMAN KULLANMA:** Başlangıç ve bitiş zamanları farklı olmak ZORUNDA
+- **EKRANDA KALMA SÜRESİ:** Nesne/ekran ne kadar süre görünür durumda kalıyorsa o süreyi ölç
+- **KONUM BELİRLEME:** Her olayın ekrandaki konumunu mutlaka belirt
 
-### Zaman Analizi Örnekleri:
-- **Tıklama:** Genelde 0.1-0.3 saniye sürer
-- **Nesne Belirme:** Nesnenin tam görünür olması 0.5-2 saniye alabilir  
-- **Animasyon:** Başlangıcından bitişine kadar tam süreyi ölç
-- **Puan Gösterimi:** Puanın görünmesi ve kaybolması arası süre
-- **Renk Değişimi:** Değişimin başlaması ve tamamlanması arası
+### OLAY TİPLERİNE GÖRE SÜRE HESAPLAMA:
+- **Anlık Olaylar (Tıklama):** En az 0.1-0.3 saniye süre ver
+- **Menü/Ekran Görünümü:** Ekranın ilk belirdiği an = startTime, kaybolduğu an = endTime
+- **Animasyonlar:** Animasyonun başladığı an = startTime, bittiği an = endTime
+- **Nesne Belirme/Kaybolma:** Nesnenin ilk göründüğü an = startTime, tam kaybolduğu an = endTime
+- **Metin/Puan Gösterimi:** Metnin belirdiği an = startTime, kaybolduğu an = endTime
+- **Seviye Seçimi/Menüler:** Ekranın tam yüklendiği an = startTime, değiştiği/kapandığı an = endTime
+
+### KRİTİK SÜRE KURALLARI:
+- **YASAKLI:** startTime ve endTime aynı olamaz!
+- **ZORUNLU:** Her olay en az 0.1 saniye, genelde 0.3+ saniye sürmeli
+- **GÖZLEM:** Videoyu izleyerek gerçek süreleri hesapla
+- **ÖRNEK:** Seviye seçim ekranı 3 saniye ekranda kalıyorsa 3 saniye süre ver
+
+### GERÇEK SÜRE ANALİZİ ÖRNEKLERİ:
+- **Tıklama Olayı:** startTime: tıklamanın başladığı an, endTime: tıklama efektinin bittiği an (0.1-0.3s)
+- **Seviye Seçimi Ekranı:** startTime: ekranın belirdiği an, endTime: ekranın kapandığı/değiştiği an (2-5s)
+- **Nesne Belirme:** startTime: nesnenin ilk göründüğü piksel, endTime: tam görünür olduğu an (0.5-2s)
+- **Menü Açılması:** startTime: menünün açılmaya başladığı an, endTime: tam açık duruma geldiği an (0.8-1.5s)
+- **Animasyon:** startTime: hareketin başladığı an, endTime: hareketin tamamen durduğu an (1-3s)  
+- **Puan Gösterimi:** startTime: rakamın belirdiği an, endTime: rakamın kaybolduğu an (0.8-2s)
+- **Loading/Yükleme:** startTime: yükleme başladığı an, endTime: yükleme tamamlandığı an (1-4s)
+
+### Konum Belirleme Örnekleri:
+- **Sol üst köşe, sol alt köşe, sağ üst köşe, sağ alt köşe**
+- **Ekran ortası, sol kenar, sağ kenar, üst kenar, alt kenar**
+- **Sol ortası, sağ ortası, üst ortası, alt ortası**
+- **Örnek:** "sol üst köşe", "ekran ortası", "sağ alt bölge", "üst kenar"
 
 ### ZAMAN HASSASİYETİ KURALLARI:
 - **ZORUNLU:** 0.1 saniye (100ms) hassasiyetinde zaman kullan
@@ -103,23 +123,44 @@ const modes: Record<string, Mode> = {
 - **endTime:** Olayın bitiş zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
 - **category:** Kullanıcının verdiği kategori adını AYNEN yaz (büyük-küçük harf önemli)
 - **description:** Olayın detaylı açıklaması (sadece açıklama, kategori adı tekrarlama)
-- **location:** Ekrandaki konum (opsiyonel)
+- **location:** Ekrandaki konum (ZORUNLU - olayın gerçekleştiği ekran bölgesi)
 
-**DOĞRU Zaman Örnekleri (0.1 saniye hassasiyeti):**
-\`{
+**DOĞRU Süre Hesaplama Örnekleri (Farklı başlangıç/bitiş zamanları):**
+
+\`// Kısa süreli olay örneği
+{
   "startTime": "00:00:15.2",
-  "endTime": "00:00:15.4", 
-  "category": "Tıklama",
+  "endTime": "00:00:15.4",     // 0.2 saniye fark
+  "category": "Tıklama", 
   "description": "Ekranın ortasındaki yeşil canavarın üzerine tıklandı",
   "location": "ekran ortası"
 }\`
 
-\`{
+\`// Orta süreli olay örneği  
+{
   "startTime": "00:00:23.1",
-  "endTime": "00:00:25.8", 
+  "endTime": "00:00:25.8",     // 2.7 saniye fark
   "category": "Nesne Belirme",
-  "description": "Mavi canavar ekranın sol tarafından yavaşça görünmeye başladı ve tam yerleşti",
+  "description": "Mavi canavar ekranın sol tarafından yavaşça görünmeye başladı ve tam yerleşti", 
   "location": "sol kenar"
+}\`
+
+\`// Uzun süreli olay örneği
+{
+  "startTime": "00:01:05.3", 
+  "endTime": "00:01:09.1",     // 3.8 saniye fark - seviye seçimi ekranı
+  "category": "Seviye Seçimi",
+  "description": "Seviye seçim menüsü ekranda görüntülendi ve kullanıcı seçim yaptı",
+  "location": "ekran ortası"
+}\`
+
+\`// Puan gösterimi örneği
+{
+  "startTime": "00:02:12.5",
+  "endTime": "00:02:14.2",     // 1.7 saniye fark
+  "category": "Puan",
+  "description": "+100 puan metni belirdi ve yavaşça kayboldu", 
+  "location": "üst ortası"
 }\`
 
 **KRİTİK ÖNEM:**
@@ -127,17 +168,19 @@ const modes: Record<string, Mode> = {
 - Kullanıcı "Nesne Belirme" yazdıysa category: "Nesne Belirme" yaz, "NESNE_BELIRDI" değil
 - Kullanıcının yazdığı kategori isimlerini birebir koru
 - Başka kategori ekleme, sadece kullanıcının verdiği kategorileri kullan
+- **LOCATION ZORUNLU:** Her olay için mutlaka ekrandaki konumunu belirt
 
 **ZAMAN KRİTİK KURALLARI:**
-- **ASLA** tüm olayları aynı saniyede başlatma ve bitirme!
-- **ZORUNLU:** 0.1 saniye (100ms) hassasiyetinde zaman kullan
-- **Format ZORUNLU:** SS:DD:SS.X (tek haneli ondalık, örn: 00:01:23.4)
-- **YASAKLI Formatlar:** 00:01:23.500, 00:01:23.100 gibi 3 haneli milisaniye
-- **İZİN VERİLEN:** 00:01:23.1, 00:01:23.2, 00:01:23.5, 00:01:23.9
-- Her olay için gerçekçi süre hesapla (0.1 saniye ile 5+ saniye arası)
-- Uzun süren animasyonları tam süreleriyle kaydet
-- Anlık olaylar bile 0.1-0.4 saniye arası süre ver (0.5 değil!)
-- Olayların videodaki gerçek sürelerini gözlemle ve buna göre startTime/endTime belirle
+- **MUTLAK YASAK:** startTime = endTime durumu! (Aynı zaman ASLA kullanılmayacak)
+- **ZORUNLU FARK:** En az 0.1 saniye fark olmalı (startTime ≠ endTime)
+- **VİDEO İZLEME:** Her olayın videodaki gerçek süresini izleyerek hesapla
+- **EKRANDA KALMA SÜRESİ:** Nesne/menü ekranda ne kadar kalıyorsa o kadar süre ver
+- **Format:** SS:DD:SS.X (0.1 saniye hassasiyeti, örn: 00:01:23.4)
+- **Kısa olaylar:** En az 0.1-0.4 saniye (tıklama, küçük animasyon)
+- **Orta olaylar:** 0.5-2 saniye (nesne belirme, puan gösterimi) 
+- **Uzun olaylar:** 2+ saniye (menü görünümü, seviye seçimi, loading)
+- **GERÇEK GÖZLEM:** Videoyu dikkatlice izle, tahmini süre verme
+- **ÖRNEK:** Menü 3 saniye ekrandaysa startTime ile endTime arası 3 saniye olmalı
 
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,

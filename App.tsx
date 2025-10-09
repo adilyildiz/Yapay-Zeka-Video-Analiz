@@ -163,6 +163,8 @@ export default function App() {
       const listForSrt = timecodeList.map((tc) => ({
         time: tc.time,
         text: tc.text || tc.value?.toString() || '',
+        startTime: tc.startTime, // AI'dan gelen başlangıç zamanı
+        endTime: tc.endTime,     // AI'dan gelen bitiş zamanı
       }));
       const srt = generateSrt(listForSrt, videoDuration);
       setSrtTranscript(srt);
@@ -247,33 +249,44 @@ export default function App() {
 
     // Excel için veri hazırlama
     const data: any[][] = [];
-    const headers = ['Başlangıç', 'Bitiş', 'Kategori', 'Metin'];
+    const headers = ['Başlangıç', 'Bitiş', 'Kategori', 'Açıklama', 'Konum'];
     data.push(headers);
 
     timecodeList.forEach((item) => {
-      let startTime = item.time;
-      let endTime = item.time; // Varsayılan olarak başlangıç ile aynı
-      let category = '';
+      let startTime = item.startTime || item.time; // AI'dan gelen startTime öncelikli
+      let endTime = item.endTime || item.time;     // AI'dan gelen endTime öncelikli
+      let category = item.category || '';           // AI'dan gelen kategori
+      let description = item.description || '';     // AI'dan gelen açıklama
+      let location = item.location || '';           // AI'dan gelen konum bilgisi
       let text = item.text || '';
 
-      // Eğer metin içinde kategori varsa ayıkla
-      const categoryMatch = text.match(/^\[(.*?)\]:\s*(.*)/);
-      if (categoryMatch) {
-        category = categoryMatch[1];
-        text = categoryMatch[2];
+      // Eğer AI'dan gelen veriler yoksa eski yöntemle parse et
+      if (!category && !description && text) {
+        const categoryMatch = text.match(/^\[(.*?)\]:\s*(.*)/);
+        if (categoryMatch) {
+          category = categoryMatch[1];
+          description = categoryMatch[2];
+        } else {
+          description = text;
+        }
       }
 
-      // SRT formatındaki zaman aralığını kontrol et (başlangıç --> bitiş)
-      if (text.includes(' --> ')) {
+      // SRT formatındaki zaman aralığını kontrol et (eski veriler için)
+      if (!item.startTime && !item.endTime && text.includes(' --> ')) {
         const timeMatch = text.match(/^(.+?)\s-->\s(.+?):\s*(.*)/);
         if (timeMatch) {
           startTime = timeMatch[1];
           endTime = timeMatch[2];
-          text = timeMatch[3];
+          description = timeMatch[3];
         }
       }
 
-      data.push([startTime, endTime, category, text]);
+      // Eğer hala açıklama yoksa text'i kullan
+      if (!description && text) {
+        description = text;
+      }
+
+      data.push([startTime, endTime, category, description, location]);
     });
 
     // XLSX workbook oluştur
@@ -286,7 +299,8 @@ export default function App() {
       { wch: 15 }, // Başlangıç
       { wch: 15 }, // Bitiş
       { wch: 20 }, // Kategori
-      { wch: 50 }  // Metin
+      { wch: 50 }, // Açıklama
+      { wch: 20 }  // Konum
     ];
     ws['!cols'] = wscols;
 

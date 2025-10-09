@@ -51,7 +51,7 @@ export const secsToSrtTime = (totalSeconds: number): string => {
 };
 
 export const generateSrt = (
-  timecodes: {time: string; text: string}[],
+  timecodes: {time: string; text: string; startTime?: string; endTime?: string}[],
   duration: number,
 ): string => {
   if (!timecodes || timecodes.length === 0) {
@@ -60,11 +60,22 @@ export const generateSrt = (
 
   return timecodes
     .map((tc, i) => {
-      const startTimeSecs = timeToSecs(tc.time);
-      const endTimeSecs =
-        i < timecodes.length - 1
-          ? timeToSecs(timecodes[i + 1].time)
-          : duration;
+      // AI'dan gelen startTime ve endTime varsa onları kullan, yoksa eskisi gibi hesapla
+      let startTimeSecs: number;
+      let endTimeSecs: number;
+
+      if (tc.startTime && tc.endTime) {
+        // AI'dan gelen başlangıç ve bitiş zamanlarını kullan
+        startTimeSecs = timeToSecs(tc.startTime);
+        endTimeSecs = timeToSecs(tc.endTime);
+      } else {
+        // Eski yöntem: sadece time varsa bitiş zamanını hesapla
+        startTimeSecs = timeToSecs(tc.time);
+        endTimeSecs =
+          i < timecodes.length - 1
+            ? timeToSecs(timecodes[i + 1].time)
+            : duration;
+      }
 
       const startTime = secsToSrtTime(startTimeSecs);
       const finalEndTimeSecs =

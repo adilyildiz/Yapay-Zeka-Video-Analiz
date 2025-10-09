@@ -334,7 +334,7 @@ video {
   backdrop-filter: blur(10px);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
   position: absolute;
-  bottom: 80px;
+  bottom: 250px;
   text-align: center;
   padding: 10px;
   color: #fff;

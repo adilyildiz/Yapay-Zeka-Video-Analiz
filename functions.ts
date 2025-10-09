@@ -108,10 +108,10 @@ const functions: FunctionDeclaration[] = [
               },
               location: {
                 type: Type.STRING,
-                description: 'Ekrandaki konum (opsiyonel)',
+                description: 'Ekrandaki konum (zorunlu - olayın gerçekleştiği ekran bölgesi, örn: "ekran ortası", "sol üst köşe")',
               },
             },
-            required: ['startTime', 'endTime', 'category', 'description'],
+            required: ['startTime', 'endTime', 'category', 'description', 'location'],
           },
         },
       },
