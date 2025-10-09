@@ -92,11 +92,11 @@ const functions: FunctionDeclaration[] = [
             properties: {
               startTime: {
                 type: Type.STRING,
-                description: 'Olayın başlangıç zamanı SS:DD:SS.mmm formatında (milisaniye hassasiyeti ile)',
+                description: 'Olayın başlangıç zamanı SS:DD:SS.X formatında (0.1 saniye hassasiyeti, örn: 00:01:23.4)',
               },
               endTime: {
                 type: Type.STRING,
-                description: 'Olayın bitiş zamanı SS:DD:SS.mmm formatında (gerçek süre hesaplı, milisaniye hassasiyeti ile)',
+                description: 'Olayın bitiş zamanı SS:DD:SS.X formatında (0.1 saniye hassasiyeti, örn: 00:01:25.7)',
               },
               category: {
                 type: Type.STRING,

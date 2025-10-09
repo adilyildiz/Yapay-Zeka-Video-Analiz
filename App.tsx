@@ -195,9 +195,9 @@ export default function App() {
       timecodes.map((t) => ({...t, text: t.text?.replaceAll("\\'", "'")})),
     );
 
-  const setCategoricalTimecodes = ({timecodes}: {timecodes: any[]}) => {
+  const setCategoricalTimecodes = ({categoricalTimecodes}: {categoricalTimecodes: any[]}) => {
     // Kategorik fonksiyondan gelen verileri standart formata dönüştür
-    const convertedTimecodes = timecodes.map((t) => ({
+    const convertedTimecodes = categoricalTimecodes.map((t) => ({
       time: t.startTime, // Ana zaman olarak startTime kullan
       text: `[${t.category}]: ${t.description}`,
       startTime: t.startTime,
@@ -480,12 +480,12 @@ ${basePrompt}
             }
             
             if (call) {
-                if (call.args && Array.isArray(call.args.timecodes)) {
+                if (call.args) {
                     let chunkTimecodes;
                     
-                    // Kategorik süreç transkripti modunda farklı filtering
-                    if (selectedMode === 'Kategorik Süreç Transkripti' && call.name === 'set_categorical_timecodes') {
-                        chunkTimecodes = call.args.timecodes.filter((tc: any) => {
+                    // Kategorik süreç transkripti modunda özel işleme
+                    if (selectedMode === 'Kategorik Süreç Transkripti' && call.name === 'set_categorical_timecodes' && Array.isArray(call.args.categoricalTimecodes)) {
+                        chunkTimecodes = call.args.categoricalTimecodes.filter((tc: any) => {
                             const startSecs = timeToSecs(tc.startTime);
                             const endSecs = timeToSecs(tc.endTime);
                             return startSecs >= startTime && endSecs <= endTime;
@@ -498,12 +498,16 @@ ${basePrompt}
                             description: tc.description,
                             location: tc.location
                         }));
-                    } else {
+                    } else if (Array.isArray(call.args.timecodes)) {
                         // Normal fonksiyonlar için mevcut filtering
                         chunkTimecodes = call.args.timecodes.filter((tc: any) => {
                             const tcSecs = timeToSecs(tc.time);
                             return tcSecs >= startTime && tcSecs < endTime;
                         });
+                    } else {
+                        console.error(`Invalid arguments for function call in chunk ${i+1}:`, call.args);
+                        overallError = (overallError || '') + `Parça ${i + 1} için geçersiz argümanlar alındı. `;
+                        continue;
                     }
                     
                     allTimecodes = allTimecodes.concat(chunkTimecodes);

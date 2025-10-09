@@ -90,26 +90,33 @@ const modes: Record<string, Mode> = {
 - **Puan Gösterimi:** Puanın görünmesi ve kaybolması arası süre
 - **Renk Değişimi:** Değişimin başlaması ve tamamlanması arası
 
+### ZAMAN HASSASİYETİ KURALLARI:
+- **ZORUNLU:** 0.1 saniye (100ms) hassasiyetinde zaman kullan
+- **YASAKLI:** 0.5 saniye veya daha büyük aralıklar kullanma
+- **Format:** SS:DD:SS.X formatı (tek haneli ondalık: .1, .2, .3, vb.)
+- **Örnekler:** 00:00:15.1, 00:00:15.2, 00:00:25.7 (DOĞRU)
+- **Yanlış:** 00:00:15.500, 00:00:25.800 (YANLIŞ - çok hassas)
+
 ### Kayıt Formatı:
 \`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri gönder:
-- **startTime:** Olayın başlangıç zamanı (SS:DD:SS.mmm formatında, milisaniye dahil)
-- **endTime:** Olayın bitiş zamanı (SS:DD:SS.mmm formatında, gerçek süre hesaplı)
+- **startTime:** Olayın başlangıç zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
+- **endTime:** Olayın bitiş zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
 - **category:** Kullanıcının verdiği kategori adını AYNEN yaz (büyük-küçük harf önemli)
 - **description:** Olayın detaylı açıklaması (sadece açıklama, kategori adı tekrarlama)
 - **location:** Ekrandaki konum (opsiyonel)
 
-**Doğru Zaman Örnekleri:**
+**DOĞRU Zaman Örnekleri (0.1 saniye hassasiyeti):**
 \`{
-  "startTime": "00:00:15.200",
-  "endTime": "00:00:15.450", 
+  "startTime": "00:00:15.2",
+  "endTime": "00:00:15.4", 
   "category": "Tıklama",
   "description": "Ekranın ortasındaki yeşil canavarın üzerine tıklandı",
   "location": "ekran ortası"
 }\`
 
 \`{
-  "startTime": "00:00:23.100",
-  "endTime": "00:00:25.800", 
+  "startTime": "00:00:23.1",
+  "endTime": "00:00:25.8", 
   "category": "Nesne Belirme",
   "description": "Mavi canavar ekranın sol tarafından yavaşça görünmeye başladı ve tam yerleşti",
   "location": "sol kenar"
@@ -123,10 +130,13 @@ const modes: Record<string, Mode> = {
 
 **ZAMAN KRİTİK KURALLARI:**
 - **ASLA** tüm olayları aynı saniyede başlatma ve bitirme!
+- **ZORUNLU:** 0.1 saniye (100ms) hassasiyetinde zaman kullan
+- **Format ZORUNLU:** SS:DD:SS.X (tek haneli ondalık, örn: 00:01:23.4)
+- **YASAKLI Formatlar:** 00:01:23.500, 00:01:23.100 gibi 3 haneli milisaniye
+- **İZİN VERİLEN:** 00:01:23.1, 00:01:23.2, 00:01:23.5, 00:01:23.9
 - Her olay için gerçekçi süre hesapla (0.1 saniye ile 5+ saniye arası)
-- Milisaniye hassasiyeti kullan (SS:DD:SS.mmm formatı)
 - Uzun süren animasyonları tam süreleriyle kaydet
-- Anlık olaylar bile 0.1-0.5 saniye arası süre ver
+- Anlık olaylar bile 0.1-0.4 saniye arası süre ver (0.5 değil!)
 - Olayların videodaki gerçek sürelerini gözlemle ve buna göre startTime/endTime belirle
 
 Tüm analiz sonuçları Türkçe olmalıdır.`,
