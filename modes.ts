@@ -76,26 +76,43 @@ const modes: Record<string, Mode> = {
 
 ### Analiz Kuralları:
 - Sadece kullanıcının belirttiği kategorilerdeki olayları tespit et
-- Her kategoriyi videoda tespit ettiğinde, o olayın **başlangıç** ve **bitiş** zaman kodlarını kaydet
-- Eğer olay anlık ise (tıklama gibi), başlangıç ve bitiş zamanı aynı olabilir
-- Her olayı kategorisiyle birlikte detaylı şekilde açıkla
+- **ZAMAN HASSASİYETİ:** Her olayın gerçek süresini dikkatli şekilde analiz et
+- **BAŞLANGIÇ-BİTİŞ SÜRELER:** Her olayın ekranda ne kadar süre kaldığını gözlemle
+- Anlık olaylar için bile 0.1-0.5 saniye gibi gerçekçi süreler kullan
+- Uzun süren olaylar (nesne görünümü, animasyon) için gerçek süreyi hesapla
+- **SANİYE ALTI HASSASIYET:** Zamanları milisaniye hassasiyetiyle (SS:DD:SS.mmm) belirt
 - Her kategoriyi AYRI AYRI gönder, birleştirme
+
+### Zaman Analizi Örnekleri:
+- **Tıklama:** Genelde 0.1-0.3 saniye sürer
+- **Nesne Belirme:** Nesnenin tam görünür olması 0.5-2 saniye alabilir  
+- **Animasyon:** Başlangıcından bitişine kadar tam süreyi ölç
+- **Puan Gösterimi:** Puanın görünmesi ve kaybolması arası süre
+- **Renk Değişimi:** Değişimin başlaması ve tamamlanması arası
 
 ### Kayıt Formatı:
 \`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri gönder:
-- **startTime:** Olayın başlangıç zamanı (SS:DD:SS formatında)
-- **endTime:** Olayın bitiş zamanı (SS:DD:SS formatında, anlık olaylar için startTime ile aynı)
+- **startTime:** Olayın başlangıç zamanı (SS:DD:SS.mmm formatında, milisaniye dahil)
+- **endTime:** Olayın bitiş zamanı (SS:DD:SS.mmm formatında, gerçek süre hesaplı)
 - **category:** Kullanıcının verdiği kategori adını AYNEN yaz (büyük-küçük harf önemli)
 - **description:** Olayın detaylı açıklaması (sadece açıklama, kategori adı tekrarlama)
 - **location:** Ekrandaki konum (opsiyonel)
 
-**Doğru Örnek (kullanıcı "Tıklama" kategorisi verdiyse):** 
+**Doğru Zaman Örnekleri:**
 \`{
-  "startTime": "00:00:15",
-  "endTime": "00:00:15", 
+  "startTime": "00:00:15.200",
+  "endTime": "00:00:15.450", 
   "category": "Tıklama",
   "description": "Ekranın ortasındaki yeşil canavarın üzerine tıklandı",
   "location": "ekran ortası"
+}\`
+
+\`{
+  "startTime": "00:00:23.100",
+  "endTime": "00:00:25.800", 
+  "category": "Nesne Belirme",
+  "description": "Mavi canavar ekranın sol tarafından yavaşça görünmeye başladı ve tam yerleşti",
+  "location": "sol kenar"
 }\`
 
 **KRİTİK ÖNEM:**
@@ -103,6 +120,14 @@ const modes: Record<string, Mode> = {
 - Kullanıcı "Nesne Belirme" yazdıysa category: "Nesne Belirme" yaz, "NESNE_BELIRDI" değil
 - Kullanıcının yazdığı kategori isimlerini birebir koru
 - Başka kategori ekleme, sadece kullanıcının verdiği kategorileri kullan
+
+**ZAMAN KRİTİK KURALLARI:**
+- **ASLA** tüm olayları aynı saniyede başlatma ve bitirme!
+- Her olay için gerçekçi süre hesapla (0.1 saniye ile 5+ saniye arası)
+- Milisaniye hassasiyeti kullan (SS:DD:SS.mmm formatı)
+- Uzun süren animasyonları tam süreleriyle kaydet
+- Anlık olaylar bile 0.1-0.5 saniye arası süre ver
+- Olayların videodaki gerçek sürelerini gözlemle ve buna göre startTime/endTime belirle
 
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,

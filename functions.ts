@@ -85,22 +85,22 @@ const functions: FunctionDeclaration[] = [
     parameters: {
       type: Type.OBJECT,
       properties: {
-        timecodes: {
+        categoricalTimecodes: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
             properties: {
               startTime: {
                 type: Type.STRING,
-                description: 'Olayın başlangıç zamanı SS:DD:SS formatında',
+                description: 'Olayın başlangıç zamanı SS:DD:SS.mmm formatında (milisaniye hassasiyeti ile)',
               },
               endTime: {
                 type: Type.STRING,
-                description: 'Olayın bitiş zamanı SS:DD:SS formatında (anlık olaylar için startTime ile aynı)',
+                description: 'Olayın bitiş zamanı SS:DD:SS.mmm formatında (gerçek süre hesaplı, milisaniye hassasiyeti ile)',
               },
               category: {
                 type: Type.STRING,
-                description: 'Olay kategorisi (örn: TIKLAMA, NESNE_BELIRDI, PUAN_DEGISIMI)',
+                description: 'Olay kategorisi (kullanıcının verdiği kategori adını aynen kullan)',
               },
               description: {
                 type: Type.STRING,
@@ -115,7 +115,7 @@ const functions: FunctionDeclaration[] = [
           },
         },
       },
-      required: ['timecodes'],
+      required: ['categoricalTimecodes'],
     },
   },
   {

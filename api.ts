@@ -12,6 +12,15 @@ import {
 } from '@google/genai';
 import OllamaAPI, { OllamaConfig, OllamaUploadedFile } from './ollama-api';
 
+// Cookie yardımcı fonksiyonları
+function getCookie(name: string): string {
+  if (typeof document === 'undefined') return '';
+  return document.cookie.split('; ').reduce((r, v) => {
+    const parts = v.split('=');
+    return parts[0] === name ? decodeURIComponent(parts[1]) : r;
+  }, '');
+}
+
 export enum APIProvider {
   GEMINI = 'gemini',
   OLLAMA = 'ollama'
@@ -60,6 +69,21 @@ export function updateAPIConfig(config: APIConfig) {
 }
 
 export function getCurrentConfig(): APIConfig {
+  // Cookie'den config'i yükle
+  const cookieValue = getCookie('api_config');
+  console.log('API Config cookie değeri:', cookieValue);
+  if (cookieValue) {
+    try {
+      const cookieConfig = JSON.parse(cookieValue) as APIConfig;
+      console.log('Cookie\'den okunan config:', cookieConfig);
+      // Cookie'deki config ile currentConfig'i güncelle
+      updateAPIConfig(cookieConfig);
+      return cookieConfig;
+    } catch (error) {
+      console.warn('Cookie\'den API config okunamadı:', error);
+    }
+  }
+  console.log('Cookie bulunamadı, varsayılan config döndürülüyor:', currentConfig);
   return currentConfig;
 }
 

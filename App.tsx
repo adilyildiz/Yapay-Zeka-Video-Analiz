@@ -137,6 +137,15 @@ export default function App() {
     document.documentElement.className = theme;
   }, [theme]);
 
+  // İlk yüklemede API config'i cookie'den yükle
+  useEffect(() => {
+    console.log('App yüklendi, API config yükleniyor...');
+    const loadedConfig = getCurrentConfig();
+    console.log('Yüklenen config:', loadedConfig);
+    setCurrentAPIConfig(loadedConfig);
+    setCurrentProvider(loadedConfig.provider === APIProvider.GEMINI ? 'Google Gemini' : 'Ollama');
+  }, []);
+
   // Mode preferences'ları cookie'ye kaydet
   useEffect(() => {
     saveModePreferences(selectedMode, customPrompt, chartMode, chartPrompt);
