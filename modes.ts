@@ -121,26 +121,35 @@ const modes: Record<string, Mode> = {
 \`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri gönder:
 - **startTime:** Olayın başlangıç zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
 - **endTime:** Olayın bitiş zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
-- **category:** Kullanıcının verdiği kategori adını AYNEN yaz (büyük-küçük harf önemli)
+- **category:** Kategoriler listesi (bir olay birden fazla kategoriye ait olabilir, array olarak gönder)
 - **description:** Olayın detaylı açıklaması (sadece açıklama, kategori adı tekrarlama)
 - **location:** Ekrandaki konum (ZORUNLU - olayın gerçekleştiği ekran bölgesi)
 
-**DOĞRU Süre Hesaplama Örnekleri (Farklı başlangıç/bitiş zamanları):**
+**DOĞRU Süre Hesaplama Örnekleri (Çoklu kategori desteği):**
 
-\`// Kısa süreli olay örneği
+\`// Tek kategori örneği
 {
   "startTime": "00:00:15.2",
   "endTime": "00:00:15.4",     // 0.2 saniye fark
-  "category": "Tıklama", 
+  "category": ["action points"], 
   "description": "Ekranın ortasındaki yeşil canavarın üzerine tıklandı",
   "location": "ekran ortası"
+}\`
+
+\`// Çoklu kategori örneği - bir olay birden fazla kategoriye uygun
+{
+  "startTime": "00:00:23.1",
+  "endTime": "00:00:25.8",     // 2.7 saniye fark
+  "category": ["selecting/collecting", "strategy/planning"], 
+  "description": "Kullanıcı stratejik olarak doğru renk ve şekli seçerek nesneyi topladı",
+  "location": "sol kenar"
 }\`
 
 \`// Orta süreli olay örneği  
 {
   "startTime": "00:00:23.1",
   "endTime": "00:00:25.8",     // 2.7 saniye fark
-  "category": "Nesne Belirme",
+  "category": ["object appearance"],
   "description": "Mavi canavar ekranın sol tarafından yavaşça görünmeye başladı ve tam yerleşti", 
   "location": "sol kenar"
 }\`
@@ -149,16 +158,16 @@ const modes: Record<string, Mode> = {
 {
   "startTime": "00:01:05.3", 
   "endTime": "00:01:09.1",     // 3.8 saniye fark - seviye seçimi ekranı
-  "category": "Seviye Seçimi",
+  "category": ["menu interaction", "level selection"],
   "description": "Seviye seçim menüsü ekranda görüntülendi ve kullanıcı seçim yaptı",
   "location": "ekran ortası"
 }\`
 
-\`// Puan gösterimi örneği
+\`// Puan gösterimi örneği - çoklu kategori
 {
   "startTime": "00:02:12.5",
   "endTime": "00:02:14.2",     // 1.7 saniye fark
-  "category": "Puan",
+  "category": ["scoring", "feedback"],
   "description": "+100 puan metni belirdi ve yavaşça kayboldu", 
   "location": "üst ortası"
 }\`

@@ -99,8 +99,11 @@ const functions: FunctionDeclaration[] = [
                 description: 'Olayın bitiş zamanı SS:DD:SS.X formatında (0.1 saniye hassasiyeti, örn: 00:01:25.7)',
               },
               category: {
-                type: Type.STRING,
-                description: 'Olay kategorisi (kullanıcının verdiği kategori adını aynen kullan)',
+                type: Type.ARRAY,
+                items: {
+                  type: Type.STRING
+                },
+                description: 'Olay kategorileri listesi (bir olay birden fazla kategoriye ait olabilir, kullanıcının verdiği kategori adlarını aynen kullan)',
               },
               description: {
                 type: Type.STRING,

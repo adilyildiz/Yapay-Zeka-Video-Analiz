@@ -51,7 +51,7 @@ export const secsToSrtTime = (totalSeconds: number): string => {
 };
 
 export const generateSrt = (
-  timecodes: {time: string; text: string; startTime?: string; endTime?: string}[],
+  timecodes: {time: string; text: string; startTime?: string; endTime?: string; category?: string}[],
   duration: number,
 ): string => {
   if (!timecodes || timecodes.length === 0) {
@@ -83,8 +83,9 @@ export const generateSrt = (
       const endTime = secsToSrtTime(finalEndTimeSecs);
 
       const text = (tc.text || '').replace(/\n/g, ' ');
+      const categoryPrefix = tc.category ? `[${tc.category}] ` : '';
 
-      return `${i + 1}\n${startTime} --> ${endTime}\n${text}`;
+      return `${i + 1}\n${startTime} --> ${endTime}\n${categoryPrefix}${text}`;
     })
     .join('\n\n');
 };

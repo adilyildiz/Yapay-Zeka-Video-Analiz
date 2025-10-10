@@ -165,6 +165,7 @@ export default function App() {
         text: tc.text || tc.value?.toString() || '',
         startTime: tc.startTime, // AI'dan gelen başlangıç zamanı
         endTime: tc.endTime,     // AI'dan gelen bitiş zamanı
+        category: Array.isArray(tc.category) ? tc.category.join(', ') : tc.category, // Çoklu kategori desteği
       }));
       const srt = generateSrt(listForSrt, videoDuration);
       setSrtTranscript(srt);
@@ -199,15 +200,20 @@ export default function App() {
 
   const setCategoricalTimecodes = ({categoricalTimecodes}: {categoricalTimecodes: any[]}) => {
     // Kategorik fonksiyondan gelen verileri standart formata dönüştür
-    const convertedTimecodes = categoricalTimecodes.map((t) => ({
-      time: t.startTime, // Ana zaman olarak startTime kullan
-      text: `[${t.category}]: ${t.description}`,
-      startTime: t.startTime,
-      endTime: t.endTime,
-      category: t.category,
-      description: t.description,
-      location: t.location
-    }));
+    const convertedTimecodes = categoricalTimecodes.map((t) => {
+      // Çoklu kategori desteği: array ise join et, string ise olduğu gibi kullan
+      const categoryDisplay = Array.isArray(t.category) ? t.category.join(', ') : t.category;
+      
+      return {
+        time: t.startTime, // Ana zaman olarak startTime kullan
+        text: `[${categoryDisplay}]: ${t.description}`,
+        startTime: t.startTime,
+        endTime: t.endTime,
+        category: t.category, // Orijinal category'i koru (array olabilir)
+        description: t.description,
+        location: t.location
+      };
+    });
     setTimecodeList(convertedTimecodes);
   };
 
@@ -255,7 +261,7 @@ export default function App() {
     timecodeList.forEach((item) => {
       let startTime = item.startTime || item.time; // AI'dan gelen startTime öncelikli
       let endTime = item.endTime || item.time;     // AI'dan gelen endTime öncelikli
-      let category = item.category || '';           // AI'dan gelen kategori
+      let category = Array.isArray(item.category) ? item.category.join(', ') : (item.category || ''); // AI'dan gelen kategori
       let description = item.description || '';     // AI'dan gelen açıklama
       let location = item.location || '';           // AI'dan gelen konum bilgisi
       let text = item.text || '';
