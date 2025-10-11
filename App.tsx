@@ -892,7 +892,13 @@ ${basePrompt}
                       <button
                         key={mode}
                         className={c('button', {active: mode === categoricalMode})}
-                        onClick={() => setCategoricalMode(mode)}>
+                        onClick={() => {
+                          setCategoricalMode(mode);
+                          // Eğer "Özel" değilse, bu modun prompt'unu input alanına doldur
+                          if (mode !== 'Özel') {
+                            setCategoricalPrompt(modes['Kategorik Süreç Transkripti'].subModes![mode] || '');
+                          }
+                        }}>
                         {mode}
                       </button>
                     ))}
@@ -914,7 +920,13 @@ ${basePrompt}
                       <button
                         key={mode}
                         className={c('button', {active: mode === chartMode})}
-                        onClick={() => setChartMode(mode)}>
+                        onClick={() => {
+                          setChartMode(mode);
+                          // Eğer "Özel" değilse, bu modun prompt'unu input alanına doldur
+                          if (mode !== 'Özel') {
+                            setChartPrompt(modes['Grafik'].subModes![mode] || '');
+                          }
+                        }}>
                         {mode}
                       </button>
                     ))}

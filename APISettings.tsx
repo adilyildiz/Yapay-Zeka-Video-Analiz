@@ -54,7 +54,15 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
   const handleGeminiApiKeyChange = (apiKey: string) => {
     const newConfig = {
       ...config,
-      gemini: { ...config.gemini, apiKey }
+      gemini: { ...config.gemini, apiKey, model: config.gemini?.model || 'gemini-2.5-flash' }
+    };
+    setConfig(newConfig);
+  };
+
+  const handleGeminiModelChange = (model: string) => {
+    const newConfig = {
+      ...config,
+      gemini: { ...config.gemini, model, apiKey: config.gemini?.apiKey || '' }
     };
     setConfig(newConfig);
   };
@@ -166,6 +174,23 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
               <p className="form-help">
                 <span className="icon">info</span>
                 API anahtarını <strong>Google AI Studio</strong>'dan ücretsiz olarak alabilirsiniz
+              </p>
+              
+              <label className="form-label" style={{ marginTop: '20px' }}>
+                Gemini Model Seçimi
+              </label>
+              <select
+                value={config.gemini?.model || 'gemini-2.5-flash'}
+                onChange={(e) => handleGeminiModelChange(e.target.value)}
+              >
+                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Hızlı)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Dengeli - Önerilen)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Güçlü)</option>
+              </select>
+              <p className="form-help">
+                <strong>Flash Lite:</strong> En hızlı, temel analizler için • 
+                <strong>Flash:</strong> Hız ve kalite dengesi, çoğu kullanım için ideal • 
+                <strong>Pro:</strong> En detaylı analiz, karmaşık videolar için
               </p>
             </div>
           )}

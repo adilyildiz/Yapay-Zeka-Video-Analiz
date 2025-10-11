@@ -1022,7 +1022,7 @@ video {
 
 /* Süre bilgisi olan marker'lar için */
 .timecodeMarker.has-duration {
-  width: auto !important; /* Style'dan gelen genişliği kullan */
+  width: auto /*!important;*/ /* Style'dan gelen genişliği kullan */
   translate: 0 0; /* Ortalama yapma */
   background: rgba(99, 102, 241, 0.15);
   border-left: 2px solid var(--primary);

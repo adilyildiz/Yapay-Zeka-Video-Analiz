@@ -30,6 +30,7 @@ export interface APIConfig {
   provider: APIProvider;
   gemini?: {
     apiKey: string;
+    model: string;
   };
   ollama?: OllamaConfig;
 }
@@ -38,7 +39,8 @@ export interface APIConfig {
 let currentConfig: APIConfig = {
   provider: APIProvider.GEMINI,
   gemini: {
-    apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || ''
+    apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
+    model: 'gemini-2.5-flash'
   },
   ollama: {
     baseURL: 'http://localhost:11434',
@@ -115,7 +117,7 @@ async function generateContent(
     
     try {
       const response = await geminiClient.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: currentConfig.gemini?.model || 'gemini-2.5-flash',
         contents: [
           {
             role: 'user',
