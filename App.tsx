@@ -43,14 +43,16 @@ function getCookie(name: string) {
 }
 
 // Mode ayarlarını kaydet
-function saveModePreferences(mode: string, customPrompt: string, chartMode: string, chartPrompt: string) {
+function saveModePreferences(mode: string, customPrompt: string, chartMode: string, chartPrompt: string, categoricalMode: string, categoricalPrompt: string) {
   const preferences = {
     selectedMode: mode,
     customPrompt,
     chartMode,
-    chartPrompt
+    chartPrompt,
+    categoricalMode,
+    categoricalPrompt,
   };
-  setCookie('mode_preferences', JSON.stringify(preferences));
+  localStorage.setItem('modePreferences', JSON.stringify(preferences));
 }
 
 // Mode ayarlarını yükle
@@ -67,6 +69,7 @@ function loadModePreferences() {
 }
 
 const chartModes = Object.keys(modes['Grafik'].subModes!);
+const categoricalModes = Object.keys(modes['Kategorik Süreç Transkripti'].subModes!);
 type ModeKey = keyof typeof modes;
 
 export default function App() {
@@ -89,6 +92,8 @@ export default function App() {
   const [customPrompt, setCustomPrompt] = useState(savedPreferences?.customPrompt || '');
   const [chartMode, setChartMode] = useState(savedPreferences?.chartMode || chartModes[0]);
   const [chartPrompt, setChartPrompt] = useState(savedPreferences?.chartPrompt || '');
+  const [categoricalMode, setCategoricalMode] = useState(savedPreferences?.categoricalMode || categoricalModes[0]);
+  const [categoricalPrompt, setCategoricalPrompt] = useState(savedPreferences?.categoricalPrompt || '');
   const [chartLabel, setChartLabel] = useState('');
   const [theme, setTheme] = useState(
     localStorage.getItem('theme') || 
@@ -121,6 +126,7 @@ export default function App() {
   const isChartMode = selectedMode === 'Grafik';
   const isCategoricalMode = selectedMode === 'Kategorik Süreç Transkripti';
   const isCustomChartMode = isChartMode && chartMode === 'Özel';
+  const isCustomCategoricalMode = isCategoricalMode && categoricalMode === 'Özel';
   const hasSubMode = isCustomMode || isChartMode || isCategoricalMode;
   
   const handleAPIConfigChange = (config: APIConfig) => {
@@ -148,8 +154,8 @@ export default function App() {
 
   // Mode preferences'ları cookie'ye kaydet
   useEffect(() => {
-    saveModePreferences(selectedMode, customPrompt, chartMode, chartPrompt);
-  }, [selectedMode, customPrompt, chartMode, chartPrompt]);
+    saveModePreferences(selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt);
+  }, [selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt]);
 
   // İlk yüklemede submode gerektiren mod varsa, direkt submode ekranına geç
   useEffect(() => {
@@ -411,7 +417,11 @@ export default function App() {
       basePrompt = typeof promptFn === 'function' ? promptFn(customPrompt) : '';
     } else if (selectedMode === 'Kategorik Süreç Transkripti') {
       const promptFn = modeConfig.prompt;
-      basePrompt = typeof promptFn === 'function' ? promptFn(customPrompt) : '';
+      if (typeof promptFn === 'function' && 'subModes' in modeConfig && modeConfig.subModes) {
+        basePrompt = promptFn(isCustomCategoricalMode ? categoricalPrompt : modeConfig.subModes[categoricalMode]);
+      } else {
+        basePrompt = typeof promptFn === 'function' ? promptFn(customPrompt) : '';
+      }
     } else if (selectedMode === 'Grafik') {
       const promptFn = modeConfig.prompt;
       if (typeof promptFn === 'function' && 'subModes' in modeConfig && modeConfig.subModes) {
@@ -618,7 +628,11 @@ ${basePrompt}
       basePrompt = typeof promptFn === 'function' ? promptFn(customPrompt) : '';
     } else if (activeMode === 'Kategorik Süreç Transkripti') {
       const promptFn = modeConfig.prompt;
-      basePrompt = typeof promptFn === 'function' ? promptFn(customPrompt) : '';
+      if (typeof promptFn === 'function' && 'subModes' in modeConfig && modeConfig.subModes) {
+        basePrompt = promptFn(isCustomCategoricalMode ? categoricalPrompt : modeConfig.subModes[categoricalMode]);
+      } else {
+        basePrompt = typeof promptFn === 'function' ? promptFn(customPrompt) : '';
+      }
     } else if (activeMode === 'Grafik') {
       const promptFn = modeConfig.prompt;
       if (typeof promptFn === 'function' && 'subModes' in modeConfig && modeConfig.subModes) {
@@ -763,6 +777,8 @@ ${basePrompt}
     setCustomPrompt('');
     setChartPrompt('');
     setChartMode(chartModes[0]);
+    setCategoricalPrompt('');
+    setCategoricalMode(categoricalModes[0]);
     setSrtTranscript('');
     setAnalysisError(null);
     setAnalysisWarning(null);
@@ -882,11 +898,23 @@ ${basePrompt}
                 </>
               ) : isCategoricalMode ? (
                 <>
-                  <h2>Analiz edilecek kategorileri girin:</h2>
+                  <h2>Kategori seçin:</h2>
+                  <div className="modeList">
+                    {categoricalModes.map((mode) => (
+                      <button
+                        key={mode}
+                        className={c('button', {active: mode === categoricalMode})}
+                        onClick={() => setCategoricalMode(mode)}>
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
-                    placeholder="Kategorileri virgülle ayırarak yazın (örn: Tıklama, Nesne Belirme, Puan Değişimi)"
-                    value={customPrompt}
-                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    className={c({active: isCustomCategoricalMode})}
+                    placeholder="Veya özel kategorileri virgülle ayırarak yazın (örn: Tıklama, Nesne Belirme, Puan Değişimi)..."
+                    value={categoricalPrompt}
+                    onChange={(e) => setCategoricalPrompt(e.target.value)}
+                    onFocus={() => setCategoricalMode('Özel')}
                     rows={3}
                   />
                 </>
@@ -982,7 +1010,7 @@ ${basePrompt}
             onClick={handleGenerate}
             disabled={
               (isCustomMode && !customPrompt.trim()) ||
-              (isCategoricalMode && !customPrompt.trim()) ||
+              (isCategoricalMode && isCustomCategoricalMode && !categoricalPrompt.trim()) ||
               (isChartMode && isCustomChartMode && !chartPrompt.trim())
             }>
             <span className="icon">play_arrow</span> Analizi Başlat
