@@ -90,6 +90,7 @@ const modes: Record<string, Mode> = {
 - **Seviye Seçimi/Menüler:** Ekranın tam yüklendiği an = startTime, değiştiği/kapandığı an = endTime
 
 ### KRİTİK SÜRE KURALLARI:
+- **MUTLAK ZAMAN:** Tüm zaman kodları (startTime ve endTime) videonun başlangıcından (00:00:00.0) itibaren hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma. Bu, kümülatif zamanlama hatalarını önler.
 - **YASAKLI:** startTime ve endTime aynı olamaz!
 - **ZORUNLU:** Her olay en az 0.1 saniye, genelde 0.3+ saniye sürmeli
 - **GÖZLEM:** Videoyu izleyerek gerçek süreleri hesapla
