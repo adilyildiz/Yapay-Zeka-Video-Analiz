@@ -27,7 +27,6 @@ import * as XLSX from 'xlsx';
 import modes from './modes';
 import {generateSrt, timeToSecs} from './utils';
 import VideoPlayer from './VideoPlayer.jsx';
-import ThemeSwitcher from './ThemeSwitcher';
 
 // Cookie yardımcı fonksiyonları
 function setCookie(name: string, value: string, days = 365) {
@@ -95,12 +94,6 @@ export default function App() {
   const [categoricalMode, setCategoricalMode] = useState(savedPreferences?.categoricalMode || categoricalModes[0]);
   const [categoricalPrompt, setCategoricalPrompt] = useState(savedPreferences?.categoricalPrompt || '');
   const [chartLabel, setChartLabel] = useState('');
-  const [theme, setTheme] = useState(
-    localStorage.getItem('theme') || 
-    (window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light')
-  );
   const [videoDuration, setVideoDuration] = useState(0);
   const [srtTranscript, setSrtTranscript] = useState('');
   const [isCopied, setIsCopied] = useState(false);
@@ -112,7 +105,7 @@ export default function App() {
   const [isAPISettingsOpen, setIsAPISettingsOpen] = useState(false);
   const [currentAPIConfig, setCurrentAPIConfig] = useState<APIConfig>(getCurrentConfig());
   const [currentProvider, setCurrentProvider] = useState<string>('Google Gemini');
-  const [chunkDuration, setChunkDuration] = useState<number | 'all'>(30);
+  const [chunkDuration, setChunkDuration] = useState<number | 'all'>('all');
   const [reanalysisStartTime, setReanalysisStartTime] = useState<string>('');
   const [reanalysisEndTime, setReanalysisEndTime] = useState<string>('');
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -134,14 +127,9 @@ export default function App() {
     setCurrentProvider(config.provider === APIProvider.GEMINI ? 'Google Gemini' : 'Ollama');
   };
 
-  const handleThemeChange = (newTheme: 'light' | 'dark') => {
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-  };
-
   useEffect(() => {
-    document.documentElement.className = theme;
-  }, [theme]);
+    document.documentElement.className = 'dark';
+  }, []);
 
   // İlk yüklemede API config'i cookie'den yükle
   useEffect(() => {
@@ -979,6 +967,8 @@ ${basePrompt}
                   { value: 60, label: '60s', desc: 'Standart' },
                   { value: 120, label: '120s', desc: 'Hızlı' },
                   { value: 180, label: '180s', desc: 'Daha Hızlı' },
+                  { value: 240, label: '240s', desc: 'En Hızlı' },
+                  { value: 360, label: '360s', desc: 'En En Hızlı' },
                   { value: 'all', label: 'Hepsi', desc: 'Tek Seferde' }
                 ].map((option) => (
                   <button
@@ -1221,7 +1211,7 @@ ${basePrompt}
   );
 
   return (
-    <main className={theme}>
+    <main className="dark">
       {(isLoadingVideo || isLoading || isReanalyzing) && (
         <div className="loading-overlay">
           <div className="loading-content">
@@ -1242,7 +1232,6 @@ ${basePrompt}
         onClose={() => setIsAPISettingsOpen(false)}
         onConfigChange={handleAPIConfigChange}
       />
-      <ThemeSwitcher theme={theme} onThemeChange={handleThemeChange} />
     </main>
   );
 }

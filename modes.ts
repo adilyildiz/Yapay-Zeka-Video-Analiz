@@ -64,138 +64,56 @@ const modes: Record<string, Mode> = {
   
   'Kategorik Süreç Transkripti': {
     emoji: '📜',
-    prompt: (input) => `Videoyu analiz et ve SADECE kullanıcının belirttiği kategorilere göre bir süreç transkripti oluştur. 
+    prompt: (input) => `Videoyu analiz et ve SADECE kullanıcının belirttiği kategorilere göre bir süreç transkripti oluştur.
 
-**KESİNLİKLE SADECE BU KATEGORİLERİ KULLAN:** ${input || 'Lütfen analiz edilmesi gereken kategorileri belirtin (örn: "Tıklama, Nesne Belirme, Puan Değişimi" şeklinde virgülle ayırarak yazın)'}
+### 1. Kategori Kullanımı
+- **Kesinlikle Sadece Bu Kategorileri Kullan:** ${input || 'Lütfen analiz edilmesi gereken kategorileri belirtin (örn: "Tıklama, Nesne Belirme, Puan Değişimi" şeklinde virgülle ayırarak yazın)'}
+- **Kategori Adlarını Koru:** Kullanıcının yazdığı kategori isimlerini (büyük/küçük harf duyarlı olarak) birebir koru. Örn: Kullanıcı "Tıklama" yazdıysa, category: ["Tıklama"] kullan.
+- **Yeni Kategori Oluşturma:** Asla kendi kendine yeni bir kategori ekleme. Eğer videoda belirtilen kategorilerden hiçbiri yoksa, boş sonuç döndür.
 
-### UYARI: 
-- **SADECE YUKARIDA BELİRTİLEN KATEGORİLERİ KULLAN!**
-- Kendi kategori oluşturma, sadece kullanıcının verdiği kategorilerde olay ara
-- Eğer kullanıcının verdiği kategorilerden hiçbiri videoda yoksa, boş sonuç döndür
-- Her kategoriyi aynen kullanıcının yazdığı şekilde kullan (büyük-küçük harf duyarlı)
+### 2. Temel Analiz Kuralları
+- **Olayları Gruplandırma:** Birbirini takip eden aynı türdeki olayları tek bir olayda birleştir. Bu birleştirilmiş olayın \`startTime\`'ı ilk olayın başlangıcı, \`endTime\`'ı ise son olayın bitişi olmalıdır. Sadece olay kategorisi veya temel eylem değiştiğinde yeni bir olay kaydı oluştur.
+- **Konum Belirleme:** Her olayın ekrandaki konumunu mutlaka belirt (örn: "sol üst köşe", "ekran ortası", "sağ alt bölge").
 
-### Analiz Kuralları:
-- Sadece kullanıcının belirttiği kategorilerdeki olayları tespit et
-- **SÜRE HESAPLAMA ZORUNLULUĞU:** Her olayın gerçek başlangıç ve bitiş zamanını ayrı ayrı hesapla
-- **ASLA AYNI ZAMAN KULLANMA:** Başlangıç ve bitiş zamanları farklı olmak ZORUNDA
-- **EKRANDA KALMA SÜRESİ:** Nesne/ekran ne kadar süre görünür durumda kalıyorsa o süreyi ölç
-- **KONUM BELİRLEME:** Her olayın ekrandaki konumunu mutlaka belirt
+### 3. Zamanlama ve Format Kuralları
+- **Mutlak Zaman:** Tüm zaman kodları (startTime ve endTime) videonun başlangıcından (00:00:00.0) itibaren hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma.
+- **Farklı Zamanlar Zorunluluğu:** \`startTime\` ve \`endTime\` **asla aynı olamaz**. Her olay için başlangıç ve bitiş zamanı arasında en az 0.1 saniyelik bir fark olmalıdır.
+- **Gerçek Süre Gözlemi:** Her olayın videodaki gerçek süresini izleyerek hesapla. Bir nesne veya menü ekranda ne kadar süre kalıyorsa, o kadar süre ver. Tahmini süre kullanma.
+  - **Anlık Olaylar (örn: Tıklama):** Genellikle 0.1 - 0.4 saniye.
+  - **Orta Süreli Olaylar (örn: Nesne belirme, Puan gösterimi):** Genellikle 0.5 - 2 saniye.
+  - **Uzun Süreli Olaylar (örn: Menü görünümü, Seviye seçimi):** Genellikle 2 saniyeden fazla.
+- **Zaman Formatı:** Zamanı \`SS:DD:SS.X\` formatında, 0.1 saniye (100ms) hassasiyetinde belirt. (Örnek: 00:01:23.4)
 
-### OLAY TİPLERİNE GÖRE SÜRE HESAPLAMA:
-- **Anlık Olaylar (Tıklama):** En az 0.1-0.3 saniye süre ver
-- **Menü/Ekran Görünümü:** Ekranın ilk belirdiği an = startTime, kaybolduğu an = endTime
-- **Animasyonlar:** Animasyonun başladığı an = startTime, bittiği an = endTime
-- **Nesne Belirme/Kaybolma:** Nesnenin ilk göründüğü an = startTime, tam kaybolduğu an = endTime
-- **Metin/Puan Gösterimi:** Metnin belirdiği an = startTime, kaybolduğu an = endTime
-- **Seviye Seçimi/Menüler:** Ekranın tam yüklendiği an = startTime, değiştiği/kapandığı an = endTime
+### 4. Çıktı Formatı
+\`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri içeren bir nesne gönder:
+- **startTime:** Olayın başlangıç zamanı (SS:DD:SS.X).
+- **endTime:** Olayın bitiş zamanı (SS:DD:SS.X).
+- **category:** Kategoriler listesi (bir olay birden fazla kategoriye ait olabilir, array olarak gönder).
+- **description:** Olayın detaylı açıklaması (kategori adını tekrarlama).
+- **location:** Ekrandaki konum.
 
-### KRİTİK SÜRE KURALLARI:
-- **MUTLAK ZAMAN:** Tüm zaman kodları (startTime ve endTime) videonun başlangıcından (00:00:00.0) itibaren hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma. Bu, kümülatif zamanlama hatalarını önler.
-- **YASAKLI:** startTime ve endTime aynı olamaz!
-- **ZORUNLU:** Her olay en az 0.1 saniye, genelde 0.3+ saniye sürmeli
-- **GÖZLEM:** Videoyu izleyerek gerçek süreleri hesapla
-- **ÖRNEK:** Seviye seçim ekranı 3 saniye ekranda kalıyorsa 3 saniye süre ver
-
-### GERÇEK SÜRE ANALİZİ ÖRNEKLERİ:
-- **Tıklama Olayı:** startTime: tıklamanın başladığı an, endTime: tıklama efektinin bittiği an (0.1-0.3s)
-- **Seviye Seçimi Ekranı:** startTime: ekranın belirdiği an, endTime: ekranın kapandığı/değiştiği an (2-5s)
-- **Nesne Belirme:** startTime: nesnenin ilk göründüğü piksel, endTime: tam görünür olduğu an (0.5-2s)
-- **Menü Açılması:** startTime: menünün açılmaya başladığı an, endTime: tam açık duruma geldiği an (0.8-1.5s)
-- **Animasyon:** startTime: hareketin başladığı an, endTime: hareketin tamamen durduğu an (1-3s)  
-- **Puan Gösterimi:** startTime: rakamın belirdiği an, endTime: rakamın kaybolduğu an (0.8-2s)
-- **Loading/Yükleme:** startTime: yükleme başladığı an, endTime: yükleme tamamlandığı an (1-4s)
-
-### Konum Belirleme Örnekleri:
-- **Sol üst köşe, sol alt köşe, sağ üst köşe, sağ alt köşe**
-- **Ekran ortası, sol kenar, sağ kenar, üst kenar, alt kenar**
-- **Sol ortası, sağ ortası, üst ortası, alt ortası**
-- **Örnek:** "sol üst köşe", "ekran ortası", "sağ alt bölge", "üst kenar"
-
-### ZAMAN HASSASİYETİ KURALLARI:
-- **ZORUNLU:** 0.1 saniye (100ms) hassasiyetinde zaman kullan
-- **YASAKLI:** 0.5 saniye veya daha büyük aralıklar kullanma
-- **Format:** SS:DD:SS.X formatı (tek haneli ondalık: .1, .2, .3, vb.)
-- **Örnekler:** 00:00:15.1, 00:00:15.2, 00:00:25.7 (DOĞRU)
-- **Yanlış:** 00:00:15.500, 00:00:25.800 (YANLIŞ - çok hassas)
-
-### Kayıt Formatı:
-\`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri gönder:
-- **startTime:** Olayın başlangıç zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
-- **endTime:** Olayın bitiş zamanı (SS:DD:SS.X formatında, 0.1s hassasiyeti ile)
-- **category:** Kategoriler listesi (bir olay birden fazla kategoriye ait olabilir, array olarak gönder)
-- **description:** Olayın detaylı açıklaması (sadece açıklama, kategori adı tekrarlama)
-- **location:** Ekrandaki konum (ZORUNLU - olayın gerçekleştiği ekran bölgesi)
-
-**DOĞRU Süre Hesaplama Örnekleri (Çoklu kategori desteği):**
-
-\`// Tek kategori örneği
+### Örnekler:
+\`// Kısa süreli, tek kategorili olay
 {
   "startTime": "00:00:15.2",
-  "endTime": "00:00:15.4",     // 0.2 saniye fark
-  "category": ["action points"], 
+  "endTime": "00:00:15.4",
+  "category": ["action points"],
   "description": "Ekranın ortasındaki yeşil canavarın üzerine tıklandı",
   "location": "ekran ortası"
 }\`
-
-\`// Çoklu kategori örneği - bir olay birden fazla kategoriye uygun
+\`// Uzun süreli, çok kategorili olay
 {
-  "startTime": "00:00:23.1",
-  "endTime": "00:00:25.8",     // 2.7 saniye fark
-  "category": ["selecting/collecting", "strategy/planning"], 
-  "description": "Kullanıcı stratejik olarak doğru renk ve şekli seçerek nesneyi topladı",
-  "location": "sol kenar"
-}\`
-
-\`// Orta süreli olay örneği  
-{
-  "startTime": "00:00:23.1",
-  "endTime": "00:00:25.8",     // 2.7 saniye fark
-  "category": ["object appearance"],
-  "description": "Mavi canavar ekranın sol tarafından yavaşça görünmeye başladı ve tam yerleşti", 
-  "location": "sol kenar"
-}\`
-
-\`// Uzun süreli olay örneği
-{
-  "startTime": "00:01:05.3", 
-  "endTime": "00:01:09.1",     // 3.8 saniye fark - seviye seçimi ekranı
+  "startTime": "00:01:05.3",
+  "endTime": "00:01:09.1",
   "category": ["menu interaction", "level selection"],
   "description": "Seviye seçim menüsü ekranda görüntülendi ve kullanıcı seçim yaptı",
   "location": "ekran ortası"
 }\`
 
-\`// Puan gösterimi örneği - çoklu kategori
-{
-  "startTime": "00:02:12.5",
-  "endTime": "00:02:14.2",     // 1.7 saniye fark
-  "category": ["scoring", "feedback"],
-  "description": "+100 puan metni belirdi ve yavaşça kayboldu", 
-  "location": "üst ortası"
-}\`
-
-**KRİTİK ÖNEM:**
-- Kullanıcı "Tıklama" yazdıysa category: "Tıklama" yaz, "TIKLAMA" değil
-- Kullanıcı "Nesne Belirme" yazdıysa category: "Nesne Belirme" yaz, "NESNE_BELIRDI" değil
-- Kullanıcının yazdığı kategori isimlerini birebir koru
-- Başka kategori ekleme, sadece kullanıcının verdiği kategorileri kullan
-- **LOCATION ZORUNLU:** Her olay için mutlaka ekrandaki konumunu belirt
-
-**ZAMAN KRİTİK KURALLARI:**
-- **MUTLAK YASAK:** startTime = endTime durumu! (Aynı zaman ASLA kullanılmayacak)
-- **ZORUNLU FARK:** En az 0.1 saniye fark olmalı (startTime ≠ endTime)
-- **VİDEO İZLEME:** Her olayın videodaki gerçek süresini izleyerek hesapla
-- **EKRANDA KALMA SÜRESİ:** Nesne/menü ekranda ne kadar kalıyorsa o kadar süre ver
-- **Format:** SS:DD:SS.X (0.1 saniye hassasiyeti, örn: 00:01:23.4)
-- **Kısa olaylar:** En az 0.1-0.4 saniye (tıklama, küçük animasyon)
-- **Orta olaylar:** 0.5-2 saniye (nesne belirme, puan gösterimi) 
-- **Uzun olaylar:** 2+ saniye (menü görünümü, seviye seçimi, loading)
-- **GERÇEK GÖZLEM:** Videoyu dikkatlice izle, tahmini süre verme
-- **ÖRNEK:** Menü 3 saniye ekrandaysa startTime ile endTime arası 3 saniye olmalı
-
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,
     subModes: {
-      'Oyun Mekanikleri': 'fun, challenge, behavioural momentum, rewards, penalties, pavlovian interaction, urgent optimism, communal discovery, strategy/planning, story, cooperation, pareto optimal, feedback, protege effect, mini games, design/editing, realism, ownership, role play, virality, cascading information, collaboration, competition, cut scenes, action points, levels, tokens, question&answer, game turns, selecting/collecting, resource management, capture/eliminate, feedback, goods/information, time pressure, tutorial, tiles/grids, infinite gameplay, appointment, movement, assessment, status, simulate, response',
+      'Oyun Mekanikleri Kategorileri': 'fun, challenge, behavioural momentum, rewards, penalties, pavlovian interaction, urgent optimism, communal discovery, strategy/planning, story, cooperation, pareto optimal, feedback, protege effect, mini games, design/editing, realism, ownership, role play, virality, cascading information, collaboration, competition, cut scenes, action points, levels, tokens, question&answer, game turns, selecting/collecting, resource management, capture/eliminate, feedback, goods/information, time pressure, tutorial, tiles/grids, infinite gameplay, appointment, movement, assessment, status, simulate, response',
       'Özel': '',
     },
   },
