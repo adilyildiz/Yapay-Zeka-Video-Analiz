@@ -1151,15 +1151,17 @@ ${basePrompt}
                     <table>
                       <thead>
                         <tr>
-                          <th>Zaman</th>
+                          <th>Başlangıç</th>
+                          <th>Bitiş</th>
                           <th>Açıklama</th>
                           <th>Nesneler</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {timecodeList.map(({time, text, objects}, i) => (
-                          <tr key={i} role="button" onClick={() => setRequestedTimecode(timeToSecs(time))}>
-                            <td><time>{time}</time></td>
+                        {timecodeList.map(({time, text, objects, startTime, endTime}, i) => (
+                          <tr key={i} role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
+                            <td><time>{startTime || time}</time></td>
+                            <td><time>{endTime || '-'}</time></td>
                             <td>{text}</td>
                             <td>{objects?.join(', ')}</td>
                           </tr>
@@ -1170,23 +1172,35 @@ ${basePrompt}
                     <Chart data={timecodeList} yLabel={chartLabel} jumpToTimecode={setRequestedTimecode} />
                   ) : activeMode && 'isList' in modes[activeMode] && modes[activeMode].isList ? (
                     <ul>
-                      {timecodeList.map(({time, text}, i) => (
-                        <li key={i} className="outputItem">
-                          <button onClick={() => setRequestedTimecode(timeToSecs(time))}>
-                            <time>{time}</time>
-                            <p className="text">{text}</p>
-                          </button>
-                        </li>
-                      ))}
+                      {timecodeList.map(({time, text, startTime, endTime}, i) => {
+                        const displayTime = startTime && endTime 
+                          ? `${startTime} - ${endTime}`
+                          : time;
+                        
+                        return (
+                          <li key={i} className="outputItem">
+                            <button onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
+                              <time>{displayTime}</time>
+                              <p className="text">{text}</p>
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <div className='paragraph-output'>
-                      {timecodeList.map(({time, text}, i) => (
-                        <span key={i} className="sentence" role="button" onClick={() => setRequestedTimecode(timeToSecs(time))}>
-                          <time>{time}</time>
-                          <span>{text}</span>
-                        </span>
-                      ))}
+                      {timecodeList.map(({time, text, startTime, endTime}, i) => {
+                        const displayTime = startTime && endTime 
+                          ? `${startTime} - ${endTime}`
+                          : time;
+                        
+                        return (
+                          <span key={i} className="sentence" role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
+                            <time>{displayTime}</time>
+                            <span>{text}</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

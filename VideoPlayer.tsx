@@ -32,6 +32,11 @@ interface Timecode {
   text?: string;
   objects?: string[];
   value?: number | string;
+  startTime?: string;
+  endTime?: string;
+  category?: string | string[];
+  description?: string;
+  location?: string;
 }
 
 interface VideoPlayerProps {
@@ -127,8 +132,10 @@ export default function VideoPlayer({
       video.currentTime = requestedTimecode;
       // Video zamanı değiştiğinde play state'ini senkronize et
       setIsPlaying(!video.paused);
+      // State'i resetle ki aynı marker'a tekrar tıklanabilsin
+      jumpToTimecode(null);
     }
-  }, [video, requestedTimecode]);
+  }, [video, requestedTimecode, jumpToTimecode]);
 
   useEffect(() => {
     const onKeyPress = (e: KeyboardEvent) => {
@@ -192,23 +199,41 @@ export default function VideoPlayer({
               />
             </div>
             <div className="timecodeMarkers">
-              {timecodeList?.map(({time, text, value}, i) => {
-                const secs = timeToSecs(time);
-                const pct = (secs / duration) * 100;
+              {timecodeList?.map(({time, text, value, startTime, endTime}, i) => {
+                // Başlangıç zamanı: startTime varsa onu kullan, yoksa time'ı kullan
+                const start = startTime || time;
+                const startSecs = timeToSecs(start);
+                const startPct = (startSecs / duration) * 100;
+                
+                // Bitiş zamanı: endTime varsa onu kullan, yoksa başlangıç zamanını kullan (nokta marker)
+                let widthPct = 0.3; // Varsayılan nokta genişliği (%)
+                
+                if (endTime) {
+                  const endSecs = timeToSecs(endTime);
+                  const durationSecs = endSecs - startSecs;
+                  widthPct = (durationSecs / duration) * 100;
+                  // Minimum ve maksimum genişlik sınırları
+                  widthPct = Math.max(0.2, Math.min(widthPct, 100 - startPct));
+                }
 
                 return (
                   <div
-                    className="timecodeMarker"
+                    className={c('timecodeMarker', {
+                      'has-duration': !!endTime
+                    })}
                     key={i}
-                    style={{left: `${pct}%`}}>
+                    style={{
+                      left: `${startPct}%`,
+                      width: endTime ? `${widthPct}%` : 'auto'
+                    }}>
                     <div
                       className="timecodeMarkerTick"
-                      onClick={() => jumpToTimecode(secs)}>
+                      onClick={() => jumpToTimecode(startSecs)}>
                       <div />
                     </div>
                     <div
-                      className={c('timecodeMarkerLabel', {right: pct > 50})}>
-                      <div>{time}</div>
+                      className={c('timecodeMarkerLabel', {right: startPct > 50})}>
+                      <div>{endTime ? `${start} - ${endTime}` : time}</div>
                       <p>{value?.toString() || text}</p>
                     </div>
                   </div>

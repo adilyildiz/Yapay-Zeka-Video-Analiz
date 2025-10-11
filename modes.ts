@@ -68,11 +68,13 @@ const modes: Record<string, Mode> = {
 
 ### 1. Kategori Kullanımı
 - **Kesinlikle Sadece Bu Kategorileri Kullan:** ${input || 'Lütfen analiz edilmesi gereken kategorileri belirtin (örn: "Tıklama, Nesne Belirme, Puan Değişimi" şeklinde virgülle ayırarak yazın)'}
-- **Kategori Adlarını Koru:** Kullanıcının yazdığı kategori isimlerini (büyük/küçük harf duyarlı olarak) birebir koru. Örn: Kullanıcı "Tıklama" yazdıysa, category: ["Tıklama"] kullan.
+- **Kategori Adlarını Koru:** Kullanıcının yazdığı kategori isimlerini (büyük/küçük harf duyarlı olarak) birebir koru. Örn: Kullanıcı "Tıklama" yazdıysa, category: "Tıklama" kullan.
 - **Yeni Kategori Oluşturma:** Asla kendi kendine yeni bir kategori ekleme. Eğer videoda belirtilen kategorilerden hiçbiri yoksa, boş sonuç döndür.
+- **TEK KATEGORİ KURALI:** Her olay **yalnızca bir kategoriye** ait olmalıdır. Bir olay birden fazla kategoriye giriyorsa, bunları AYRI olaylar olarak raporla.
 
 ### 2. Temel Analiz Kuralları
-- **Olayları Gruplandırma:** Birbirini takip eden aynı türdeki olayları tek bir olayda birleştir. Bu birleştirilmiş olayın \`startTime\`'ı ilk olayın başlangıcı, \`endTime\`'ı ise son olayın bitişi olmalıdır. Sadece olay kategorisi veya temel eylem değiştiğinde yeni bir olay kaydı oluştur.
+- **Olayları Gruplandırma:** Birbirini takip eden **aynı kategorideki** olayları tek bir olayda birleştir. Bu birleştirilmiş olayın \`startTime\`'ı ilk olayın başlangıcı, \`endTime\`'ı ise son olayın bitişi olmalıdır.
+- **Kategori Değişiminde Yeni Olay:** Kategori değiştiğinde **mutlaka** yeni bir olay kaydı oluştur. Aynı anda iki farklı kategori asla birleştirilmemeli.
 - **Konum Belirleme:** Her olayın ekrandaki konumunu mutlaka belirt (örn: "sol üst köşe", "ekran ortası", "sağ alt bölge").
 
 ### 3. Zamanlama ve Format Kuralları
@@ -88,27 +90,50 @@ const modes: Record<string, Mode> = {
 \`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri içeren bir nesne gönder:
 - **startTime:** Olayın başlangıç zamanı (SS:DD:SS.X).
 - **endTime:** Olayın bitiş zamanı (SS:DD:SS.X).
-- **category:** Kategoriler listesi (bir olay birden fazla kategoriye ait olabilir, array olarak gönder).
+- **category:** Tek bir kategori adı (string olarak, array DEĞİL).
 - **description:** Olayın detaylı açıklaması (kategori adını tekrarlama).
 - **location:** Ekrandaki konum.
 
-### Örnekler:
-\`// Kısa süreli, tek kategorili olay
+### 5. Örnekler:
+\`// Doğru - Tek kategori
 {
   "startTime": "00:00:15.2",
   "endTime": "00:00:15.4",
-  "category": ["action points"],
+  "category": "action points",
   "description": "Ekranın ortasındaki yeşil canavarın üzerine tıklandı",
   "location": "ekran ortası"
 }\`
-\`// Uzun süreli, çok kategorili olay
+
+\`// YANLIŞ - Birden fazla kategori (BU ŞEKİLDE YAPMA!)
 {
   "startTime": "00:01:05.3",
   "endTime": "00:01:09.1",
-  "category": ["menu interaction", "level selection"],
-  "description": "Seviye seçim menüsü ekranda görüntülendi ve kullanıcı seçim yaptı",
+  "category": ["menu interaction", "level selection"], // YANLIŞ!
+  "description": "...",
+  "location": "..."
+}\`
+
+\`// Doğru - Aynı olay farklı kategorilere giriyorsa, ayrı olaylar olarak raporla
+{
+  "startTime": "00:01:05.3",
+  "endTime": "00:01:07.2",
+  "category": "menu interaction",
+  "description": "Seviye seçim menüsü ekranda görüntülendi",
+  "location": "ekran ortası"
+},
+{
+  "startTime": "00:01:07.2",
+  "endTime": "00:01:09.1",
+  "category": "level selection",
+  "description": "Kullanıcı 3. seviyeyi seçti",
   "location": "ekran ortası"
 }\`
+
+### 6. Önemli Hatırlatmalar:
+- Her olayda **sadece bir kategori** kullan (string, array değil).
+- Farklı kategorilerdeki olayları **asla birleştirme**.
+- Kategori değiştiğinde **yeni olay başlat**.
+- Aynı kategorideki ardışık olayları **birleştir**.
 
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,

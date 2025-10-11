@@ -1017,7 +1017,40 @@ video {
   width: 10px;
   background: rgba(0, 0, 0, 0.01);
   translate: -4px 0;
+  transition: all 0.2s ease;
 }
+
+/* Süre bilgisi olan marker'lar için */
+.timecodeMarker.has-duration {
+  width: auto !important; /* Style'dan gelen genişliği kullan */
+  translate: 0 0; /* Ortalama yapma */
+  background: rgba(99, 102, 241, 0.15);
+  border-left: 2px solid var(--primary);
+  border-right: 2px solid var(--primary);
+}
+
+.timecodeMarker.has-duration .timecodeMarkerTick {
+  width: 100%;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 4px 4px 0 0;
+}
+
+.timecodeMarker.has-duration .timecodeMarkerTick > div {
+  width: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--link));
+  translate: 0 0;
+  opacity: 0.6;
+}
+
+.timecodeMarker.has-duration:hover {
+  background: rgba(99, 102, 241, 0.25);
+  z-index: 100;
+}
+
+.timecodeMarker.has-duration:hover .timecodeMarkerTick > div {
+  opacity: 1;
+}
+
 .timecodeMarker:hover .timecodeMarkerLabel {
   opacity: 1;
 }
@@ -1039,26 +1072,41 @@ video {
 }
 
 .timecodeMarkerLabel {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(10px);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   opacity: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
   font-size: 11px;
-  transition: opacity 0.1s;
+  transition: opacity 0.2s ease;
   pointer-events: none;
   position: absolute;
   top: 0;
   translate: 0 calc(-100% - 15px);
   z-index: 99;
-  padding: 8px;
-  border-radius: 5px;
+  padding: 8px 10px;
+  border-radius: 6px;
   width: max-content;
-  max-width: 200px;
-  color: var(--mid);
+  max-width: 250px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* Süre bilgisi olan marker'ların label'ı için */
+.timecodeMarker.has-duration .timecodeMarkerLabel {
+  background: rgba(99, 102, 241, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+  max-width: 300px;
+}
+
+.timecodeMarker.has-duration .timecodeMarkerLabel div {
+  color: #fff;
+  font-weight: 600;
+}
+
 .timecodeMarkerLabel.right {
   right: 0;
 }
@@ -1546,12 +1594,26 @@ video {
   padding: 10px 15px;
   border-radius: 6px;
   width: 100%;
+  align-items: flex-start;
+}
+.panel-content ul button time {
+  flex-shrink: 0;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  font-size: 13px;
 }
 .panel-content ul button:hover {
   background: var(--border);
 }
+.panel-content ul button:hover time {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+}
 .panel-content ul button p {
   font-size: 14px;
+  flex: 1;
 }
 .panel-content time {
   color: var(--link);
@@ -1559,7 +1621,25 @@ video {
   border-radius: 4px;
   font-size: inherit;
   text-decoration: underline;
+  font-family: 'Space Mono', monospace;
+  font-weight: 500;
+  white-space: nowrap;
 }
+
+/* Zaman aralığı gösterimi için */
+.panel-content time:has(+ time)::after,
+.outputItem time:contains(' - ')::after {
+  content: '';
+}
+
+.paragraph-output .sentence time {
+  margin-right: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
 .paragraph-output .sentence {
   font-size: 16px;
   line-height: 1.8;
@@ -1572,9 +1652,6 @@ video {
 }
 .paragraph-output .sentence:hover {
   opacity: 1;
-}
-.paragraph-output .sentence time {
-  margin-right: 8px;
 }
 
 .srt-actions {
