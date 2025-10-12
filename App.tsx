@@ -71,6 +71,25 @@ const chartModes = Object.keys(modes['Grafik'].subModes!);
 const categoricalModes = Object.keys(modes['Kategorik Süreç Transkripti'].subModes!);
 type ModeKey = keyof typeof modes;
 
+// Tarayıcı bildirimi gönderme fonksiyonu
+function sendNotification(title: string, body: string) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const notification = new Notification(title, {
+      body,
+      icon: '/favicon.ico', // İkon varsa kullanılır
+      badge: '/favicon.ico',
+      tag: 'video-analysis',
+      requireInteraction: false,
+    });
+
+    // Bildirime tıklanınca pencereyi ön plana getir
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+  }
+}
+
 export default function App() {
   // Cookie'den mode preferences'ları yükle
   const savedPreferences = loadModePreferences();
@@ -129,6 +148,11 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.className = 'dark';
+    
+    // Tarayıcı bildirimi izni iste
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, []);
 
   // İlk yüklemede API config'i cookie'den yükle
@@ -580,6 +604,25 @@ ${basePrompt}
     setIsLoading(false);
     setAnalysisProgress(null);
     scrollRef.current?.scrollTo({top: 0});
+    
+    // Analiz tamamlandı bildirimi gönder
+    const resultCount = allTimecodes.length;
+    if (!overallError && resultCount > 0) {
+      sendNotification(
+        '✅ Video Analizi Tamamlandı',
+        `"${fileName}" dosyasının analizi başarıyla tamamlandı. ${resultCount} satır veri üretildi.`
+      );
+    } else if (!overallError && resultCount === 0) {
+      sendNotification(
+        '⚠️ Video Analizi Tamamlandı',
+        `"${fileName}" analizi tamamlandı ancak veri üretilemedi.`
+      );
+    } else {
+      sendNotification(
+        '⚠️ Video Analizi Tamamlandı',
+        `Analiz tamamlandı ancak bazı hatalar oluştu. ${resultCount > 0 ? resultCount + ' satır veri üretildi.' : ''}`
+      );
+    }
   };
 
   const handleReanalysis = async () => {
