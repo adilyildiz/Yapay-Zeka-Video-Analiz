@@ -78,7 +78,7 @@ function sendNotification(title: string, body: string) {
       body,
       icon: '/favicon.ico', // İkon varsa kullanılır
       badge: '/favicon.ico',
-      tag: 'video-analysis',
+      tag: `video-analysis-${Date.now()}`, // Her bildirim için benzersiz tag
       requireInteraction: false,
     });
 
