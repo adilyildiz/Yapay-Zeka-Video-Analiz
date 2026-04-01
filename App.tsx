@@ -1350,7 +1350,7 @@ ${basePrompt}
                 </details>
               )}
               
-              <details className="output-panel" open>
+              <details className="output-panel transcript-panel" open>
                 <summary>
                   <h3>Transkript</h3>
                   <span className="icon">expand_more</span>
