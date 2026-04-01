@@ -29,6 +29,13 @@ const modes: Record<string, Mode> = {
     emoji: '📜',
     prompt: `Videoyu analiz et ve aşağıdaki olay türlerini ve kuralları kullanarak bir transkript oluştur. Her bir olayı tespit ettiğinde, videodaki zaman koduyla birlikte \`set_timecodes\` fonksiyonuna gönderilen bir nesneye yerleştir.
 
+### ⏱️ ZAMAN DAMGASI DOĞRULUĞU KURALLARI (EN ÖNCELİKLİ)
+- Her olayın zaman damgasını belirlerken, videonun GERÇEK oynatma zamanını kullan.
+- Videonun başı 00:00:00'dır. Tüm zaman damgaları bu başlangıca göre MUTLAK olarak hesaplanmalıdır.
+- Zaman damgalarını tahmin etme. Bir olayı kaydetmeden önce, o anın videodaki tam zamanını doğrula.
+- Ardışık olaylar arasında mantıklı zaman artışı olmalıdır — birden saniyeler atlama veya aynı zaman damgasını tekrarlama.
+- Video içeriğindeki sayaçları veya süre göstergelerini video zamanı olarak KULLANMA.
+
 ### 1. Tıklama Olayları
 - **Tetikleyici:** Ekranda anlık olarak beliren küçük, yarı şeffaf beyaz daireyi tespit et.
 - **Kaydedilecek Bilgiler:**
@@ -79,6 +86,8 @@ const modes: Record<string, Mode> = {
 
 ### 3. Zamanlama ve Format Kuralları
 - **Mutlak Zaman:** Tüm zaman kodları (startTime ve endTime) videonun başlangıcından (00:00:00.0) itibaren hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma.
+- **Videonun Oynatma Zamanını Kullan:** Zaman damgalarını belirlerken videonun gerçek oynatma zamanını gözlemle. Video içeriğinde görünen sayaçları, süre göstergelerini veya zamanlayıcıları video zamanı olarak KULLANMA — bunlar içerik zamanıdır, video zamanı değil.
+- **Zaman Damgalarını Tahmin Etme:** Her olayı kaydetmeden önce o anın videodaki tam zamanını doğrula. Ardışık olaylar arasında mantıklı bir zaman artışı olmalıdır.
 - **Farklı Zamanlar Zorunluluğu:** \`startTime\` ve \`endTime\` **asla aynı olamaz**. Her olay için başlangıç ve bitiş zamanı arasında en az 0.1 saniyelik bir fark olmalıdır.
 - **Gerçek Süre Gözlemi:** Her olayın videodaki gerçek süresini izleyerek hesapla. Bir nesne veya menü ekranda ne kadar süre kalıyorsa, o kadar süre ver. Tahmini süre kullanma.
   - **Anlık Olaylar (örn: Tıklama):** Genellikle 0.1 - 0.4 saniye.
@@ -147,27 +156,40 @@ Tüm analiz sonuçları Türkçe olmalıdır.`,
     prompt: `Bu videodaki her sahne için, sahneyi açıklayan altyazılar oluştur ve konuşulan \
     metinleri tırnak işareti içinde belirt. Her altyazıyı, videodaki zaman koduyla birlikte \
     set_timecodes fonksiyonuna gönderilen bir nesneye yerleştir. Tüm açıklamalar ve \
-    altyazılar Türkçe olmalıdır.`,
+    altyazılar Türkçe olmalıdır.
+    
+    ZAMAN DAMGASI KURALI: Videonun gerçek oynatma zamanını kullan (00:00:00'dan itibaren). \
+    Tahmin etme, her sahnenin videodaki tam zamanını gözlemle. Video içeriğindeki sayaçları \
+    veya süre göstergelerini video zamanı olarak KULLANMA.`,
     isList: true,
   },
   'Paragraf': {
     emoji: '📝',
     prompt: `Bu videoyu özetleyen bir paragraf oluştur. 3 ila 5 cümle arasında tut. \
     Özetin her cümlesini, videodaki zaman koduyla birlikte set_timecodes \
-    fonksiyonuna gönderilen bir nesneye yerleştir. Özet tamamen Türkçe olmalıdır.`,
+    fonksiyonuna gönderilen bir nesneye yerleştir. Özet tamamen Türkçe olmalıdır.
+    
+    ZAMAN DAMGASI KURALI: Videonun gerçek oynatma zamanını kullan (00:00:00'dan itibaren). \
+    Tahmin etme, her sahnenin videodaki tam zamanını gözlemle.`,
   },
   'Önemli Anlar': {
     emoji: '🔑',
     prompt: `Video için madde madde önemli noktalar oluştur. Her maddeyi, videodaki \
     zaman koduyla birlikte set_timecodes fonksiyonuna gönderilen bir nesneye \
-    yerleştir. Tüm maddeler Türkçe olmalıdır.`,
+    yerleştir. Tüm maddeler Türkçe olmalıdır.
+    
+    ZAMAN DAMGASI KURALI: Videonun gerçek oynatma zamanını kullan (00:00:00'dan itibaren). \
+    Tahmin etme, her anın videodaki tam zamanını gözlemle.`,
     isList: true,
   },
   'Tablo': {
     emoji: '🤓',
     prompt: `Bu videodan 5 önemli sahne seç ve set_timecodes_with_objects fonksiyonunu \
     zaman kodu, 10 kelime veya daha az metin açıklaması ve sahnede görünen \
-    nesnelerin listesi (temsili emojilerle) ile çağır. Tüm açıklamalar Türkçe olmalıdır.`,
+    nesnelerin listesi (temsili emojilerle) ile çağır. Tüm açıklamalar Türkçe olmalıdır.
+    
+    ZAMAN DAMGASI KURALI: Videonun gerçek oynatma zamanını kullan (00:00:00'dan itibaren). \
+    Tahmin etme, her sahnenin videodaki tam zamanını gözlemle.`,
   },
   'Haiku': {
     emoji: '🌸',

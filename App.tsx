@@ -23,6 +23,7 @@ import {generateContent, uploadFile, type UploadedFile, APIConfig, APIProvider, 
 import APISettings from './APISettings';
 import Chart from './Chart.jsx';
 import functions from './functions';
+import {sliceVideo} from './utils';
 import * as XLSX from 'xlsx';
 import modes from './modes';
 import {generateSrt, timeToSecs} from './utils';
@@ -56,6 +57,16 @@ function saveModePreferences(mode: string, customPrompt: string, chartMode: stri
 
 // Mode ayarlarını yükle
 function loadModePreferences() {
+  // Önce localStorage'dan oku (saveModePreferences buraya yazıyor)
+  const lsValue = localStorage.getItem('modePreferences');
+  if (lsValue) {
+    try {
+      return JSON.parse(lsValue);
+    } catch {
+      // devam et
+    }
+  }
+  // Fallback: eski cookie'den oku
   const cookieValue = getCookie('mode_preferences');
   if (cookieValue) {
     try {
@@ -105,7 +116,7 @@ export default function App() {
   const [isAPISettingsOpen, setIsAPISettingsOpen] = useState(false);
   const [currentAPIConfig, setCurrentAPIConfig] = useState<APIConfig>(getCurrentConfig());
   const [currentProvider, setCurrentProvider] = useState<string>('Google Gemini');
-  const [chunkDuration, setChunkDuration] = useState<number | 'all'>('all');
+  const [chunkDuration, setChunkDuration] = useState<number | 'all'>(60);
   const [reanalysisStartTime, setReanalysisStartTime] = useState<string>('');
   const [reanalysisEndTime, setReanalysisEndTime] = useState<string>('');
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -320,18 +331,23 @@ export default function App() {
     setIsLoadingVideo(true);
     setVidUrl(URL.createObjectURL(fileToUpload));
     
-    // Orijinal dosyayı sakla (Ollama için chunk processing)
+    // Orijinal dosyayı sakla — Gemini'ye yükleme analiz aşamasında yapılacak
     fileRef.current = fileToUpload;
-    
-    try {
-      const res = await uploadFile(fileToUpload);
-      setFile(res);
-      setIsLoadingVideo(false);
-      setStep('mode');
-    } catch (e) {
-      setVideoError(true);
-      setIsLoadingVideo(false);
+
+    // Ollama için hemen yükle (frame extraction gerektirir)
+    if (currentAPIConfig.provider === APIProvider.OLLAMA) {
+      try {
+        const res = await uploadFile(fileToUpload);
+        setFile(res);
+      } catch (e) {
+        setVideoError(true);
+        setIsLoadingVideo(false);
+        return;
+      }
     }
+
+    setIsLoadingVideo(false);
+    setStep('mode');
   };
 
   const handleFileDrop = (e: React.DragEvent<HTMLElement>) => {
@@ -367,7 +383,7 @@ export default function App() {
   };
 
   const handleGenerate = async () => {
-    if (!file || !videoDuration) return;
+    if (!fileRef.current || !videoDuration) return;
 
     setAnalysisError(null);
     setAnalysisWarning(null);
@@ -375,6 +391,21 @@ export default function App() {
     setStep('results');
     setActiveMode(selectedMode);
     setIsLoading(true);
+
+    // Gemini: 'all' modunda tam videoyu şimdi yükle, parçalı modda chunk'lar ayrı yüklenecek
+    let uploadedFile: UploadedFile | null = file;
+    if (currentAPIConfig.provider === APIProvider.GEMINI && chunkDuration === 'all' && !file) {
+      try {
+        setAnalysisProgress('Video yükleniyor...');
+        const res = await uploadFile(fileRef.current);
+        setFile(res);
+        uploadedFile = res;
+      } catch (e) {
+        setAnalysisError('Video yüklenirken hata oluştu.');
+        setIsLoading(false);
+        return;
+      }
+    }
     setTimecodeList(null);
 
     if (isChartMode) {
@@ -438,53 +469,113 @@ export default function App() {
 
         // Mode-specific optimizations
         let chunkPrompt: string;
+        const timingInstructions = `
+### ZAMAN DOĞRULUK TALİMATLARI (KRİTİK)
+- Bu videonun TOPLAM SÜRESİ: ${formatSecondsToHHMMSS(videoDuration)} (${Math.round(videoDuration)} saniye).
+- Senden YALNIZCA ${formatSecondsToHHMMSS(startTime)} ile ${formatSecondsToHHMMSS(endTime)} arasındaki bölümü analiz etmeni istiyorum.
+- MUTLAK ZAMAN DAMGALARI KULLAN: Tüm zaman kodları videonun 00:00:00 başlangıcından itibaren hesaplanmalıdır.
+- İlk timecode en erken ${formatSecondsToHHMMSS(startTime)} olabilir, son timecode en geç ${formatSecondsToHHMMSS(endTime)} olabilir.
+- Videonun oynatma çubuğundaki zamanı referans al. Tahmin etme, ekrandaki gerçek zamanı gözlemle.
+- Eğer videoda görünen bir saat, sayaç veya zamanlayıcı varsa, onu referans ALMA — bunlar videonun kendi zamanı değil, içerik zamanıdır.
+- Zaman damgalarını SS:DD:SS formatında yaz.
+- Aralığın dışına çıkan timecode YAZMA.
+`;
         if (selectedMode === 'Detaylı Transkript') {
-          chunkPrompt = `Video bölümünü ${formatSecondsToHHMMSS(startTime)}-${formatSecondsToHHMMSS(endTime)} arasında analiz et.
+          chunkPrompt = `${timingInstructions}
 
 ${basePrompt}
 
-ÖNEMLİ: 
-- Mutlak zaman damgalarını kullan (video başlangıcından itibaren, bölüm başlangıcından değil)
-- Zaman damgalarını SS:DD:SS formatında yaz
-- set_timecodes fonksiyonunu sonuçlarla çağır
-- Sadece belirtilen zaman aralığını analiz et
-- TÜM SONUÇLAR TÜRKÇE OLMALIDIR
+- set_timecodes fonksiyonunu sonuçlarla çağır.
+- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi analizinle fonksiyonu çağır.`;
         } else {
-          chunkPrompt = `Video bölümünü ${formatSecondsToHHMMSS(startTime)} ile ${formatSecondsToHHMMSS(endTime)} arasında analiz et.
+          chunkPrompt = `${timingInstructions}
 
 ${basePrompt}
 
-ÖNEMLİ: 
-- Mutlak zaman damgalarını kullan (video başlangıcından itibaren, bölüm başlangıcından değil)
-- Zaman damgalarını SS:DD:SS formatında yaz
-- set_timecodes fonksiyonunu sonuçlarla çağır
-- Sadece belirtilen zaman aralığını analiz et
-- TÜM SONUÇLAR TÜRKÇE OLMALIDIR
+- set_timecodes fonksiyonunu sonuçlarla çağır.
+- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi analizinle fonksiyonu çağır.`;
         }
 
         try {
-            // Ollama için chunk'a özgü frame extraction
-            let chunkFile = file;
-            if (currentAPIConfig.provider === APIProvider.OLLAMA && file && 'name' in file) {
-              const originalFile = fileRef.current; // Video dosyasını sakla
+            let chunkFile: UploadedFile | null = uploadedFile;
+            let useChunkLocalTime = false;
+
+            // Gemini API + parçalı analiz: videoyu kes ve ayrı yükle
+            if (currentAPIConfig.provider === APIProvider.GEMINI && chunkDuration !== 'all') {
+              const originalFile = fileRef.current;
               if (originalFile && originalFile.type.startsWith('video/')) {
-                const midTime = (startTime + endTime) / 2; // Chunk'ın ortasındaki zaman
+                try {
+                  setAnalysisProgress(
+                    `Parça ${i + 1}/${numChunks} kesiliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
+                  );
+                  const sliced = await sliceVideo(originalFile, startTime, endTime);
+                  console.log(`Video chunk ${i + 1} kesildi: ${sliced.size} bytes`);
+                  setAnalysisProgress(
+                    `Parça ${i + 1}/${numChunks} yükleniyor...`
+                  );
+                  chunkFile = await uploadFile(sliced);
+                  useChunkLocalTime = true;
+                  console.log(`Video chunk ${i + 1} Gemini'ye yüklendi`);
+                } catch (sliceError) {
+                  console.warn('Video kesme başarısız, tam video kullanılacak:', sliceError);
+                  // Kesme başarısızsa orijinal dosyayı kullan
+                }
+              }
+            }
+            // Ollama için chunk'a özgü frame extraction
+            else if (currentAPIConfig.provider === APIProvider.OLLAMA && file && 'name' in file) {
+              const originalFile = fileRef.current;
+              if (originalFile && originalFile.type.startsWith('video/')) {
+                const midTime = (startTime + endTime) / 2;
                 try {
                   const { extractOllamaFrameAtTime } = await import('./api');
                   chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
                   console.log(`Extracted frame at ${midTime}s for chunk ${i + 1}`);
                 } catch (frameError) {
                   console.warn('Frame extraction failed, using original file:', frameError);
-                  // Frame extraction başarısızsa orijinal file'ı kullan
                 }
               }
             }
+
+            // Eğer video kesildi ise, prompt'u chunk'ın yerel zamanına göre düzelt
+            let finalPrompt = chunkPrompt;
+            if (useChunkLocalTime) {
+              const chunkDur = endTime - startTime;
+              finalPrompt = `Bu video parçası, orijinal videonun ${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)} arasındaki bölümüdür.
+Bu parçanın süresi: ${Math.round(chunkDur)} saniye.
+
+${basePrompt}
+
+### ZAMAN DAMGASI TALİMATLARI (KRİTİK)
+- Bu video parçası orijinal videonun ${formatSecondsToHHMMSS(startTime)} ile ${formatSecondsToHHMMSS(endTime)} arasına karşılık gelir.
+- Zaman damgalarını MUTLAKA orijinal videonun zamanına göre yaz (${formatSecondsToHHMMSS(startTime)}'dan başlayarak).
+- Bu videonun 00:00:00'ı aslında orijinal videonun ${formatSecondsToHHMMSS(startTime)} zamanına denk gelir.
+- Videonun her saniyesine ${startTime} saniye ekleyerek orijinal video zamanını hesapla.
+- Örnek: Videonun 5. saniyesindeki bir olay = ${formatSecondsToHHMMSS(startTime + 5)}
+- İlk timecode en erken ${formatSecondsToHHMMSS(startTime)}, son timecode en geç ${formatSecondsToHHMMSS(endTime)} olabilir.
+- Zaman damgalarını SS:DD:SS formatında yaz.
+
+- set_timecodes fonksiyonunu sonuçlarla çağır.
+- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
+
+Şimdi analizinle fonksiyonu çağır.`;
+            }
+
+            setAnalysisProgress(
+                `Parça ${i + 1}/${numChunks} analiz ediliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
+            );
+
+            if (!chunkFile) {
+              console.error(`Chunk ${i + 1}: Dosya yüklenemedi, atlanıyor`);
+              overallError = (overallError || '') + `Parça ${i + 1} için dosya yüklenemedi. `;
+              continue;
+            }
             
-            const resp = await generateContent(chunkPrompt, functions, chunkFile);
+            const resp = await generateContent(finalPrompt, functions, chunkFile);
             lastDebugInfo = resp;
             let call = resp.functionCalls?.[0];
 
@@ -583,7 +674,7 @@ ${basePrompt}
   };
 
   const handleReanalysis = async () => {
-    if (!file || !reanalysisStartTime || !reanalysisEndTime) return;
+    if (!fileRef.current || !reanalysisStartTime || !reanalysisEndTime) return;
 
     const startSeconds = parseTimeToSeconds(reanalysisStartTime);
     const endSeconds = parseTimeToSeconds(reanalysisEndTime);
@@ -643,41 +734,66 @@ ${basePrompt}
       );
 
       let chunkPrompt: string;
+      const reTimingInstructions = `
+### ZAMAN DOĞRULUK TALİMATLARI (KRİTİK)
+- Bu videonun TOPLAM SÜRESİ: ${formatSecondsToHHMMSS(videoDuration)} (${Math.round(videoDuration)} saniye).
+- Senden YALNIZCA ${formatSecondsToHHMMSS(chunkStart)} ile ${formatSecondsToHHMMSS(chunkEnd)} arasındaki bölümü DETAYLI olarak yeniden analiz etmeni istiyorum.
+- MUTLAK ZAMAN DAMGALARI KULLAN: Tüm zaman kodları videonun 00:00:00 başlangıcından itibaren hesaplanmalıdır.
+- İlk timecode en erken ${formatSecondsToHHMMSS(chunkStart)} olabilir, son timecode en geç ${formatSecondsToHHMMSS(chunkEnd)} olabilir.
+- Videonun oynatma çubuğundaki zamanı referans al. Tahmin etme, ekrandaki gerçek zamanı gözlemle.
+- Video içeriğindeki sayaçları veya süre göstergelerini video zamanı olarak KULLANMA.
+- Zaman damgalarını SS:DD:SS formatında yaz.
+- Aralığın dışına çıkan timecode YAZMA.
+`;
       if (activeMode === 'Detaylı Transkript') {
-        chunkPrompt = `Video bölümünü ${formatSecondsToHHMMSS(chunkStart)}-${formatSecondsToHHMMSS(chunkEnd)} arasında DETAYLI olarak yeniden analiz et.
+        chunkPrompt = `${reTimingInstructions}
 
 ${basePrompt}
 
-ÖNEMLİ: 
-- Bu yeniden analiz olduğu için daha detaylı sonuçlar ver
-- Mutlak zaman damgalarını kullan (video başlangıcından itibaren)
-- Zaman damgalarını SS:DD:SS formatında yaz
-- set_timecodes fonksiyonunu sonuçlarla çağır
-- Sadece belirtilen zaman aralığını analiz et
-- TÜM SONUÇLAR TÜRKÇE OLMALIDIR
-- Mümkün olduğunca çok detay yakala
+- Bu yeniden analiz olduğu için daha detaylı sonuçlar ver.
+- Mümkün olduğunca çok detay yakala.
+- set_timecodes fonksiyonunu sonuçlarla çağır.
+- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi detaylı analizinle fonksiyonu çağır.`;
       } else {
-        chunkPrompt = `Video bölümünü ${formatSecondsToHHMMSS(chunkStart)} ile ${formatSecondsToHHMMSS(chunkEnd)} arasında DETAYLI olarak yeniden analiz et.
+        chunkPrompt = `${reTimingInstructions}
 
 ${basePrompt}
 
-ÖNEMLİ: 
-- Bu yeniden analiz olduğu için daha detaylı sonuçlar ver
-- Mutlak zaman damgalarını kullan (video başlangıcından itibaren)
-- Zaman damgalarını SS:DD:SS formatında yaz
-- set_timecodes fonksiyonunu sonuçlarla çağır
-- Sadece belirtilen zaman aralığını analiz et
-- TÜM SONUÇLAR TÜRKÇE OLMALIDIR
+- Bu yeniden analiz olduğu için daha detaylı sonuçlar ver.
+- set_timecodes fonksiyonunu sonuçlarla çağır.
+- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi detaylı analizinle fonksiyonu çağır.`;
       }
 
       try {
+        let chunkFile: UploadedFile | null = file;
+        let useChunkLocalTime = false;
+
+        // Gemini API: videoyu kes ve ayrı yükle
+        if (currentAPIConfig.provider === APIProvider.GEMINI) {
+          const originalFile = fileRef.current;
+          if (originalFile && originalFile.type.startsWith('video/')) {
+            try {
+              setAnalysisProgress(
+                `Parça ${i + 1}/${numChunks} kesiliyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
+              );
+              const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+              console.log(`Reanalysis chunk ${i + 1} kesildi: ${sliced.size} bytes`);
+              setAnalysisProgress(
+                `Parça ${i + 1}/${numChunks} yükleniyor...`
+              );
+              chunkFile = await uploadFile(sliced);
+              useChunkLocalTime = true;
+            } catch (sliceError) {
+              console.warn('Video kesme başarısız (reanalysis), tam video kullanılacak:', sliceError);
+            }
+          }
+        }
         // Ollama için chunk'a özgü frame extraction
-        let chunkFile = file;
-        if (currentAPIConfig.provider === APIProvider.OLLAMA && file && 'name' in file) {
+        else if (currentAPIConfig.provider === APIProvider.OLLAMA && file && 'name' in file) {
           const originalFile = fileRef.current;
           if (originalFile && originalFile.type.startsWith('video/')) {
             const midTime = (chunkStart + chunkEnd) / 2;
@@ -691,7 +807,41 @@ ${basePrompt}
           }
         }
 
-        const resp = await generateContent(chunkPrompt, functions, chunkFile);
+        // Eğer video kesildi ise, prompt'u güncelle
+        let finalPrompt = chunkPrompt;
+        if (useChunkLocalTime) {
+          const chunkDur = chunkEnd - chunkStart;
+          finalPrompt = `Bu video parçası, orijinal videonun ${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)} arasındaki bölümüdür.
+Bu parçanın süresi: ${Math.round(chunkDur)} saniye.
+
+${basePrompt}
+
+### ZAMAN DAMGASI TALİMATLARI (KRİTİK)
+- Bu video parçası orijinal videonun ${formatSecondsToHHMMSS(chunkStart)} ile ${formatSecondsToHHMMSS(chunkEnd)} arasına karşılık gelir.
+- Zaman damgalarını MUTLAKA orijinal videonun zamanına göre yaz (${formatSecondsToHHMMSS(chunkStart)}'dan başlayarak).
+- Bu videonun 00:00:00'ı aslında orijinal videonun ${formatSecondsToHHMMSS(chunkStart)} zamanına denk gelir.
+- Videonun her saniyesine ${chunkStart} saniye ekleyerek orijinal video zamanını hesapla.
+- Örnek: Videonun 5. saniyesindeki bir olay = ${formatSecondsToHHMMSS(chunkStart + 5)}
+- İlk timecode en erken ${formatSecondsToHHMMSS(chunkStart)}, son timecode en geç ${formatSecondsToHHMMSS(chunkEnd)} olabilir.
+- Zaman damgalarını SS:DD:SS formatında yaz.
+- Bu yeniden analiz olduğu için daha detaylı sonuçlar ver.
+
+- set_timecodes fonksiyonunu sonuçlarla çağır.
+- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
+
+Şimdi detaylı analizinle fonksiyonu çağır.`;
+        }
+
+        setAnalysisProgress(
+          `Parça ${i + 1}/${numChunks} yeniden analiz ediliyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
+        );
+
+        if (!chunkFile) {
+          console.error(`Reanalysis chunk ${i + 1}: Dosya yüklenemedi, atlanıyor`);
+          continue;
+        }
+
+        const resp = await generateContent(finalPrompt, functions, chunkFile);
         let call = resp.functionCalls?.[0];
 
         if (!call && resp.candidates?.[0]?.finishReason === 'MALFORMED_FUNCTION_CALL') {
@@ -1045,6 +1195,10 @@ ${basePrompt}
             isLoadingVideo={isLoadingVideo}
             videoError={videoError}
             onDurationChange={setVideoDuration}
+            onGapClick={(start, end) => {
+              setReanalysisStartTime(start);
+              setReanalysisEndTime(end);
+            }}
           />
         </div>
         <div className="output-column" ref={scrollRef}>

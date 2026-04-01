@@ -47,6 +47,7 @@ interface VideoPlayerProps {
   videoError: boolean;
   jumpToTimecode: (seconds: number) => void;
   onDurationChange: (duration: number) => void;
+  onGapClick?: (startTime: string, endTime: string) => void;
 }
 
 export default function VideoPlayer({
@@ -57,6 +58,7 @@ export default function VideoPlayer({
   videoError,
   jumpToTimecode,
   onDurationChange,
+  onGapClick,
 }: VideoPlayerProps) {
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [duration, setDuration] = useState(0);
@@ -71,6 +73,66 @@ export default function VideoPlayer({
     () => timecodeList?.slice().reverse(),
     [timecodeList],
   );
+
+  // Transkript kapsama alanlarını hesapla
+  const coverageData = useMemo(() => {
+    if (!timecodeList || timecodeList.length === 0 || !duration) return null;
+
+    // Her timecode'u bir aralığa dönüştür
+    const segments: {start: number; end: number}[] = [];
+    const sorted = timecodeList.slice().sort((a, b) => {
+      const aStart = timeToSecs(a.startTime || a.time);
+      const bStart = timeToSecs(b.startTime || b.time);
+      return aStart - bStart;
+    });
+
+    for (let i = 0; i < sorted.length; i++) {
+      const t = sorted[i];
+      const start = timeToSecs(t.startTime || t.time);
+      let end: number;
+      if (t.endTime) {
+        end = timeToSecs(t.endTime);
+      } else {
+        // Tek noktalı timecode: sonraki timecode'a kadar veya +10sn (hangisi küçükse)
+        const nextStart = i < sorted.length - 1 
+          ? timeToSecs(sorted[i + 1].startTime || sorted[i + 1].time)
+          : duration;
+        end = Math.min(start + 10, nextStart, duration);
+      }
+      segments.push({start, end});
+    }
+
+    // Örtüşen aralıkları birleştir
+    const merged: {start: number; end: number}[] = [];
+    for (const seg of segments) {
+      if (merged.length > 0 && seg.start <= merged[merged.length - 1].end) {
+        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, seg.end);
+      } else {
+        merged.push({...seg});
+      }
+    }
+
+    const coveredSeconds = merged.reduce((sum, s) => sum + (s.end - s.start), 0);
+    const coveragePercent = Math.min(100, (coveredSeconds / duration) * 100);
+
+    // Boşlukları (gap) hesapla
+    const gaps: {start: number; end: number}[] = [];
+    if (merged.length > 0) {
+      if (merged[0].start > 0) {
+        gaps.push({start: 0, end: merged[0].start});
+      }
+      for (let i = 0; i < merged.length - 1; i++) {
+        if (merged[i].end < merged[i + 1].start) {
+          gaps.push({start: merged[i].end, end: merged[i + 1].start});
+        }
+      }
+      if (merged[merged.length - 1].end < duration) {
+        gaps.push({start: merged[merged.length - 1].end, end: duration});
+      }
+    }
+
+    return {segments: merged, gaps, coveredSeconds, coveragePercent};
+  }, [timecodeList, duration]);
 
   const togglePlay = useCallback(() => {
     if (!video) return;
@@ -180,6 +242,55 @@ export default function VideoPlayer({
           </div>
 
           <div className="videoControls">
+            {coverageData && coverageData.segments.length > 0 && (
+              <div className="transcriptCoverage">
+                <div className="transcriptCoverageBar">
+                  {coverageData.segments.map((seg, i) => (
+                    <div
+                      key={`seg-${i}`}
+                      className="transcriptCoverageSegment"
+                      style={{
+                        left: `${(seg.start / duration) * 100}%`,
+                        width: `${((seg.end - seg.start) / duration) * 100}%`,
+                      }}
+                    >
+                      <div className="transcriptCoverageTooltip">
+                        {formatTime(seg.start)} - {formatTime(seg.end)} ({formatTime(seg.end - seg.start)})
+                      </div>
+                    </div>
+                  ))}
+                  {coverageData.gaps.map((gap, i) => (
+                    <div
+                      key={`gap-${i}`}
+                      className="transcriptCoverageGap"
+                      style={{
+                        left: `${(gap.start / duration) * 100}%`,
+                        width: `${((gap.end - gap.start) / duration) * 100}%`,
+                      }}
+                      onClick={() => {
+                        if (onGapClick) {
+                          const fmt = (s: number) => {
+                            const h = Math.floor(s / 3600);
+                            const m = Math.floor((s % 3600) / 60);
+                            const sec = Math.floor(s % 60);
+                            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+                          };
+                          onGapClick(fmt(gap.start), fmt(gap.end));
+                        }
+                      }}
+                    >
+                      <div className="transcriptCoverageTooltip">
+                        Boşluk: {formatTime(gap.start)} - {formatTime(gap.end)} ({formatTime(gap.end - gap.start)})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="transcriptCoverageInfo">
+                  <span>Transkript Kapsamı: %{coverageData.coveragePercent.toFixed(1)}</span>
+                  <span>{formatTime(coverageData.coveredSeconds)} / {formatTime(duration)}</span>
+                </div>
+              </div>
+            )}
             <div className="videoScrubber">
               <input
                 style={{'--pct': `${currentPercent}%`} as React.CSSProperties}

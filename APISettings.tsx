@@ -14,7 +14,7 @@ function getCookie(name: string) {
     return parts[0] === name ? decodeURIComponent(parts[1]) : r;
   }, '');
 }
-import { APIProvider, APIConfig, getCurrentConfig, updateAPIConfig, testOllamaConnection, getOllamaModels } from './api';
+import { APIProvider, APIConfig, getCurrentConfig, updateAPIConfig, testOllamaConnection, getOllamaModels, getGeminiModels } from './api';
 
 interface APISettingsProps {
   isOpen: boolean;
@@ -28,6 +28,8 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
   const [connectionStatus, setConnectionStatus] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [geminiModels, setGeminiModels] = useState<{id: string, displayName: string}[]>([]);
+  const [isLoadingGeminiModels, setIsLoadingGeminiModels] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -45,6 +47,18 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
         }
     }
   }, [isOpen]);
+
+  // Gemini API anahtarı değiştiğinde modelleri çek
+  useEffect(() => {
+    const apiKey = config.gemini?.apiKey;
+    if (apiKey && apiKey.length > 10 && config.provider === APIProvider.GEMINI) {
+      setIsLoadingGeminiModels(true);
+      getGeminiModels(apiKey).then(models => {
+        setGeminiModels(models);
+        setIsLoadingGeminiModels(false);
+      });
+    }
+  }, [config.gemini?.apiKey, config.provider]);
 
   const handleProviderChange = (provider: APIProvider) => {
     const newConfig = { ...config, provider };
@@ -182,15 +196,27 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
               <select
                 value={config.gemini?.model || 'gemini-2.5-flash'}
                 onChange={(e) => handleGeminiModelChange(e.target.value)}
+                disabled={isLoadingGeminiModels}
               >
-                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Hızlı)</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Dengeli - Önerilen)</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Güçlü)</option>
+                {geminiModels.length > 0 ? (
+                  geminiModels.map(model => (
+                    <option key={model.id} value={model.id}>{model.displayName}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Hızlı)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Dengeli - Önerilen)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Güçlü)</option>
+                    <option value="gemma-3-27b-it">Gemma 3 27B IT</option>
+                  </>
+                )}
               </select>
               <p className="form-help">
-                <strong>Flash Lite:</strong> En hızlı, temel analizler için • 
-                <strong>Flash:</strong> Hız ve kalite dengesi, çoğu kullanım için ideal • 
-                <strong>Pro:</strong> En detaylı analiz, karmaşık videolar için
+                {isLoadingGeminiModels 
+                  ? '⏳ Modeller yükleniyor...' 
+                  : geminiModels.length > 0 
+                    ? `✅ ${geminiModels.length} model API'den yüklendi`
+                    : 'API anahtarını girdikten sonra modeller otomatik yüklenecektir'}
               </p>
             </div>
           )}

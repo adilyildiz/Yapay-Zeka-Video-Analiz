@@ -203,6 +203,45 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
   }
 }
 
+// Gemini modellerini REST API'den alma fonksiyonu
+export async function getGeminiModels(apiKey: string): Promise<{id: string, displayName: string}[]> {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+    );
+    if (!response.ok) {
+      throw new Error(`API hatası: ${response.status}`);
+    }
+    const data = await response.json();
+    const models: {id: string, displayName: string}[] = [];
+    for (const model of data.models || []) {
+      // Video analizi için uygun olan generateContent destekli modelleri filtrele
+      const methods: string[] = model.supportedGenerationMethods || [];
+      if (model.name && methods.includes('generateContent')) {
+        const id = model.name.replace('models/', '');
+        // Gemini ve Gemma modellerini göster (tts, image, live, embedding vb. hariç)
+        if ((id.startsWith('gemini-') || id.startsWith('gemma-')) && 
+            !id.includes('tts') && 
+            !id.includes('image') && 
+            !id.includes('live') && 
+            !id.includes('embedding') &&
+            !id.includes('computer-use') &&
+            !id.includes('deep-research') &&
+            !id.includes('robotics')) {
+          models.push({
+            id,
+            displayName: model.displayName || id
+          });
+        }
+      }
+    }
+    return models;
+  } catch (error) {
+    console.error('Gemini modelleri alınamadı:', error);
+    return [];
+  }
+}
+
 // Ollama bağlantısını test etme fonksiyonu
 export async function testOllamaConnection(config: OllamaConfig): Promise<boolean> {
   const testClient = new OllamaAPI(config);

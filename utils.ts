@@ -89,3 +89,67 @@ export const generateSrt = (
     })
     .join('\n\n');
 };
+
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
+
+// Singleton FFmpeg instance — lazy-load, tekrar kullanılabilir
+let ffmpegInstance: FFmpeg | null = null;
+let ffmpegLoading: Promise<FFmpeg> | null = null;
+
+async function getFFmpeg(): Promise<FFmpeg> {
+  if (ffmpegInstance && ffmpegInstance.loaded) return ffmpegInstance;
+  if (ffmpegLoading) return ffmpegLoading;
+
+  ffmpegLoading = (async () => {
+    const ffmpeg = new FFmpeg();
+    // multithread için SharedArrayBuffer gerekir (COOP/COEP headers)
+    // yoksa single-thread core kullanılır
+    await ffmpeg.load();
+    ffmpegInstance = ffmpeg;
+    ffmpegLoading = null;
+    return ffmpeg;
+  })();
+
+  return ffmpegLoading;
+}
+
+/**
+ * FFmpeg.wasm ile video dosyasını belirli zaman aralığında keser.
+ * -c copy ile re-encode yapmadan keser — neredeyse anında.
+ */
+export async function sliceVideo(
+  file: globalThis.File,
+  startSecs: number,
+  endSecs: number,
+): Promise<globalThis.File> {
+  const ffmpeg = await getFFmpeg();
+
+  const inputName = 'input' + (file.name.substring(file.name.lastIndexOf('.')) || '.mp4');
+  const outputName = `chunk_${startSecs}_${endSecs}.mp4`;
+
+  // Dosyayı FFmpeg sanal dosya sistemine yaz
+  await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+  const duration = endSecs - startSecs;
+
+  // -c copy: re-encode yapmadan keser (çok hızlı)
+  await ffmpeg.exec([
+    '-ss', startSecs.toString(),
+    '-i', inputName,
+    '-t', duration.toString(),
+    '-c', 'copy',
+    '-avoid_negative_ts', 'make_zero',
+    outputName,
+  ]);
+
+  // Çıktıyı oku
+  const data = await ffmpeg.readFile(outputName);
+
+  // Temizlik
+  await ffmpeg.deleteFile(inputName);
+  await ffmpeg.deleteFile(outputName);
+
+  const blob = new Blob([data], { type: 'video/mp4' });
+  return new File([blob], outputName, { type: 'video/mp4' });
+}

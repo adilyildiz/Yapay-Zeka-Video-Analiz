@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^0.7.0",
     "@google/generative-ai": "^0.24.0",
     "classnames": "^2.5.1",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "baseline-browser-mapping": "^2.10.13",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
