@@ -133,7 +133,7 @@ async function generateContent(
           },
         ],
         config: {
-          temperature: 0.5,
+          temperature: 0.3,
           //topP: 0.9,
           //topK: 40,
           //maxOutputTokens: 4096, // Detaylı transkript için daha yüksek limit

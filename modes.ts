@@ -75,13 +75,12 @@ const modes: Record<string, Mode> = {
 
 ### 1. Kategori Kullanımı
 - **Kesinlikle Sadece Bu Kategorileri Kullan:** ${input || 'Lütfen analiz edilmesi gereken kategorileri belirtin (örn: "Tıklama, Nesne Belirme, Puan Değişimi" şeklinde virgülle ayırarak yazın)'}
-- **Kategori Adlarını Koru:** Kullanıcının yazdığı kategori isimlerini (büyük/küçük harf duyarlı olarak) birebir koru. Örn: Kullanıcı "Tıklama" yazdıysa, category: "Tıklama" kullan.
+- **Kategori Adlarını Koru:** Kullanıcının yazdığı kategori isimlerini (büyük/küçük harf duyarlı olarak) birebir koru. Örn: Kullanıcı "Tıklama" yazdıysa, category içinde "Tıklama" kullan.
 - **Yeni Kategori Oluşturma:** Asla kendi kendine yeni bir kategori ekleme. Eğer videoda belirtilen kategorilerden hiçbiri yoksa, boş sonuç döndür.
-- **TEK KATEGORİ KURALI:** Her olay **yalnızca bir kategoriye** ait olmalıdır. Bir olay birden fazla kategoriye giriyorsa, bunları AYRI olaylar olarak raporla.
+- **ÇOKLU KATEGORİ KURALI:** Bir olay birden fazla kategoriye ait olabilir. Bu durumda, kategorileri bir dizi (array) içinde belirt. Kategoriler birbirine benzer olsa bile, ilişkili olduğunu düşündüğün tüm kategorileri döndür.
 
 ### 2. Temel Analiz Kuralları
-- **Olayları Gruplandırma:** Birbirini takip eden **aynı kategorideki** olayları tek bir olayda birleştir. Bu birleştirilmiş olayın \`startTime\`'ı ilk olayın başlangıcı, \`endTime\`'ı ise son olayın bitişi olmalıdır.
-- **Kategori Değişiminde Yeni Olay:** Kategori değiştiğinde **mutlaka** yeni bir olay kaydı oluştur. Aynı anda iki farklı kategori asla birleştirilmemeli.
+- **Olayları Gruplama:** Olayları gruplama. Her bir olayı ayrı ayrı raporla.
 - **Konum Belirleme:** Her olayın ekrandaki konumunu mutlaka belirt (örn: "sol üst köşe", "ekran ortası", "sağ alt bölge").
 
 ### 3. Zamanlama ve Format Kuralları
@@ -89,6 +88,7 @@ const modes: Record<string, Mode> = {
 - **Videonun Oynatma Zamanını Kullan:** Zaman damgalarını belirlerken videonun gerçek oynatma zamanını gözlemle. Video içeriğinde görünen sayaçları, süre göstergelerini veya zamanlayıcıları video zamanı olarak KULLANMA — bunlar içerik zamanıdır, video zamanı değil.
 - **Zaman Damgalarını Tahmin Etme:** Her olayı kaydetmeden önce o anın videodaki tam zamanını doğrula. Ardışık olaylar arasında mantıklı bir zaman artışı olmalıdır.
 - **Farklı Zamanlar Zorunluluğu:** \`startTime\` ve \`endTime\` **asla aynı olamaz**. Her olay için başlangıç ve bitiş zamanı arasında en az 0.1 saniyelik bir fark olmalıdır.
+- **Maksimum Süre ve Bölme:** Bir olay en fazla 5 saniye sürebilir. Eğer bir olay 5 saniyeden uzun sürerse, onu 5 saniyelik veya daha kısa parçalara bölerek birden fazla olay olarak raporla. Her parçanın \`description\` alanına, olayın devam ettiğini belirten bir ifade ekle (örn: "Seviye seçimi devam ediyor (Bölüm 1/3)").
 - **Gerçek Süre Gözlemi:** Her olayın videodaki gerçek süresini izleyerek hesapla. Bir nesne veya menü ekranda ne kadar süre kalıyorsa, o kadar süre ver. Tahmini süre kullanma.
   - **Anlık Olaylar (örn: Tıklama):** Genellikle 0.1 - 0.4 saniye.
   - **Orta Süreli Olaylar (örn: Nesne belirme, Puan gösterimi):** Genellikle 0.5 - 2 saniye.
@@ -99,7 +99,7 @@ const modes: Record<string, Mode> = {
 \`set_categorical_timecodes\` fonksiyonunu kullanarak her olay için şu bilgileri içeren bir nesne gönder:
 - **startTime:** Olayın başlangıç zamanı (SS:DD:SS.X).
 - **endTime:** Olayın bitiş zamanı (SS:DD:SS.X).
-- **category:** Tek bir kategori adı (string olarak, array DEĞİL).
+- **category:** Bir veya daha fazla kategori adı (string veya string dizisi).
 - **description:** Olayın detaylı açıklaması (kategori adını tekrarlama).
 - **location:** Ekrandaki konum.
 
@@ -113,41 +113,23 @@ const modes: Record<string, Mode> = {
   "location": "ekran ortası"
 }\`
 
-\`// YANLIŞ - Birden fazla kategori (BU ŞEKİLDE YAPMA!)
+\`// Doğru - Birden fazla kategori
 {
   "startTime": "00:01:05.3",
   "endTime": "00:01:09.1",
-  "category": ["menu interaction", "level selection"], // YANLIŞ!
-  "description": "...",
-  "location": "..."
-}\`
-
-\`// Doğru - Aynı olay farklı kategorilere giriyorsa, ayrı olaylar olarak raporla
-{
-  "startTime": "00:01:05.3",
-  "endTime": "00:01:07.2",
-  "category": "menu interaction",
-  "description": "Seviye seçim menüsü ekranda görüntülendi",
-  "location": "ekran ortası"
-},
-{
-  "startTime": "00:01:07.2",
-  "endTime": "00:01:09.1",
-  "category": "level selection",
-  "description": "Kullanıcı 3. seviyeyi seçti",
+  "category": ["menu interaction", "level selection"],
+  "description": "Kullanıcı seviye seçim menüsünden 3. seviyeyi seçti",
   "location": "ekran ortası"
 }\`
 
 ### 6. Önemli Hatırlatmalar:
-- Her olayda **sadece bir kategori** kullan (string, array değil).
-- Farklı kategorilerdeki olayları **asla birleştirme**.
-- Kategori değiştiğinde **yeni olay başlat**.
-- Aynı kategorideki ardışık olayları **birleştir**.
+- Bir olay birden fazla kategoriye aitse, kategorileri bir dizi içinde ver.
+- Olayları birleştirme, her birini ayrı raporla.
 
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,
     subModes: {
-      'Oyun Mekanikleri Kategorileri': 'story, tutorials, cut scenes, level selections, movement, selecting, collecting, rewards, penalties, action points, menu interactions, game turns, good characters, bad characters',
+      'Oyun Mekanikleri Kategorileri': 'fun, challenge, behavioural momentum, rewards, penalties, pavlovian interaction, urgent optimism, communal discovery, strategy/planning, story, cooperation, pareto optimal, feedback, protege effect, mini games, design/editing, realism, ownership, role play, virality, cascading information, collaboration, competition, cut scenes, action points, levels, tokens, question&answer, game turns, selecting/collecting, resource management, capture/eliminate, feedback, goods/information, time pressure, tutorial, tiles/grids, infinite gameplay, appointment, movement, assessment, status, simulate, response',
       'Özel': '',
     },
   },
