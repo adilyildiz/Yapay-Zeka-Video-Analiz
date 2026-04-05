@@ -806,7 +806,75 @@ ${basePrompt}
       basePrompt = typeof modeConfig.prompt === 'string' ? modeConfig.prompt : '';
     }
 
+    // Önceki analiz sonuçlarını bağlam olarak hazırla
+    let previousAnalysisContext = '';
+    if (timecodeList && timecodeList.length > 0) {
+      // Yeniden analiz edilen aralıktaki mevcut sonuçları örnek olarak gönder
+      const relevantTimecodes = timecodeList.filter((tc: any) => {
+        const tcSecs = timeToSecs(tc.time);
+        return tcSecs >= startSeconds && tcSecs <= endSeconds;
+      });
+
+      // Ayrıca aralığın hemen öncesindeki ve sonrasındaki olayları da bağlam olarak ekle
+      const contextBefore = timecodeList.filter((tc: any) => {
+        const tcSecs = timeToSecs(tc.time);
+        return tcSecs >= (startSeconds - 10) && tcSecs < startSeconds;
+      }).slice(-3);
+
+      const contextAfter = timecodeList.filter((tc: any) => {
+        const tcSecs = timeToSecs(tc.time);
+        return tcSecs > endSeconds && tcSecs <= (endSeconds + 10);
+      }).slice(0, 3);
+
+      if (relevantTimecodes.length > 0 || contextBefore.length > 0 || contextAfter.length > 0) {
+        const formatEventForContext = (tc: any) => {
+          const time = tc.startTime || tc.time;
+          const endT = tc.endTime ? ` - ${tc.endTime}` : '';
+          const cat = tc.category ? ` [${Array.isArray(tc.category) ? tc.category.join(', ') : tc.category}]` : '';
+          const desc = tc.description || tc.text || '';
+          const loc = tc.location ? ` (${tc.location})` : '';
+          return `- ${time}${endT}${cat}: ${desc}${loc}`;
+        };
+
+        previousAnalysisContext = `
+### ÖNCEKİ ANALİZ SONUÇLARI (BAĞLAM VE ÖRNEK)
+Aşağıda bu aralık için daha önce yapılmış analiz sonuçları verilmiştir. Bu bilgileri şu şekilde kullan:
+- AYNI nesneleri, karakterleri ve öğeleri AYNI İSİMLERLE tanımla (örn: önceki analizde "kasklı avokado" dediyse, sen de "kasklı avokado" de).
+- Format ve yapı olarak bu örnekleri referans al.
+- Ancak daha önce KAÇIRILMIŞ olabilecek detayları da yakala — bu yeniden analiz daha kapsamlı olmalı.
+- Önceki sonuçları birebir kopyalama, videoyu yeniden izleyerek kendi gözlemlerini yaz.
+`;
+
+        if (contextBefore.length > 0) {
+          previousAnalysisContext += `
+**Aralık öncesi bağlam (${formatSecondsToHHMMSS(startSeconds)} öncesi):**
+${contextBefore.map(formatEventForContext).join('\n')}
+`;
+        }
+
+        if (relevantTimecodes.length > 0) {
+          previousAnalysisContext += `
+**Mevcut analiz sonuçları (${formatSecondsToHHMMSS(startSeconds)} - ${formatSecondsToHHMMSS(endSeconds)}):**
+${relevantTimecodes.map(formatEventForContext).join('\n')}
+`;
+        }
+
+        if (contextAfter.length > 0) {
+          previousAnalysisContext += `
+**Aralık sonrası bağlam (${formatSecondsToHHMMSS(endSeconds)} sonrası):**
+${contextAfter.map(formatEventForContext).join('\n')}
+`;
+        }
+      }
+    }
+
     setAnalysisProgress(`Seçilen aralık yeniden analiz ediliyor: ${reanalysisStartTime} - ${reanalysisEndTime}`);
+
+    // Kategorik Süreç Transkripti modunda kullanılacak doğru fonksiyon adını belirle
+    const isCategoricalReanalysis = activeMode === 'Kategorik Süreç Transkripti';
+    const functionCallInstruction = isCategoricalReanalysis 
+      ? 'set_categorical_timecodes fonksiyonunu sonuçlarla çağır.'
+      : 'set_timecodes fonksiyonunu sonuçlarla çağır.';
 
     for (let i = 0; i < numChunks; i++) {
       const chunkStart = startSeconds + (i * chunkSize);
@@ -828,28 +896,16 @@ ${basePrompt}
 - Zaman damgalarını SS:DD:SS formatında yaz.
 - Aralığın dışına çıkan timecode YAZMA.
 `;
-      if (activeMode === 'Detaylı Transkript') {
-        chunkPrompt = `${reTimingInstructions}
-
+      chunkPrompt = `${reTimingInstructions}
+${previousAnalysisContext}
 ${basePrompt}
 
 - Bu yeniden analiz olduğu için daha detaylı sonuçlar ver.
 - Mümkün olduğunca çok detay yakala.
-- set_timecodes fonksiyonunu sonuçlarla çağır.
+- ${functionCallInstruction}
 - TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi detaylı analizinle fonksiyonu çağır.`;
-      } else {
-        chunkPrompt = `${reTimingInstructions}
-
-${basePrompt}
-
-- Bu yeniden analiz olduğu için daha detaylı sonuçlar ver.
-- set_timecodes fonksiyonunu sonuçlarla çağır.
-- TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
-
-Şimdi detaylı analizinle fonksiyonu çağır.`;
-      }
 
       try {
         let chunkFile: UploadedFile | null = file;
@@ -896,7 +952,7 @@ ${basePrompt}
           const chunkDur = chunkEnd - chunkStart;
           finalPrompt = `Bu video parçası, orijinal videonun ${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)} arasındaki bölümüdür.
 Bu parçanın süresi: ${Math.round(chunkDur)} saniye.
-
+${previousAnalysisContext}
 ${basePrompt}
 
 ### ZAMAN DAMGASI TALİMATLARI (KRİTİK)
@@ -909,7 +965,7 @@ ${basePrompt}
 - Zaman damgalarını SS:DD:SS formatında yaz.
 - Bu yeniden analiz olduğu için daha detaylı sonuçlar ver.
 
-- set_timecodes fonksiyonunu sonuçlarla çağır.
+- ${functionCallInstruction}
 - TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi detaylı analizinle fonksiyonu çağır.`;
@@ -941,10 +997,19 @@ ${basePrompt}
                      (endSecs >= chunkStart && endSecs <= chunkEnd) ||
                      (startSecs <= chunkStart && endSecs >= chunkEnd);
             });
-            reanalysisTimecodes = reanalysisTimecodes.concat(chunkCategoricalTimecodes.map((ctc: any) => ({
-              time: ctc.startTime,
-              description: `${ctc.category}: ${ctc.description} (${ctc.location || 'Bilinmeyen konum'})`
-            })));
+            // Kategorik verilerin tam yapısını koru (startTime, endTime, category, description, location, text)
+            reanalysisTimecodes = reanalysisTimecodes.concat(chunkCategoricalTimecodes.map((ctc: any) => {
+              const categoryDisplay = Array.isArray(ctc.category) ? ctc.category.join(', ') : ctc.category;
+              return {
+                time: ctc.startTime,
+                text: `[${categoryDisplay}]: ${ctc.description}`,
+                startTime: ctc.startTime,
+                endTime: ctc.endTime,
+                category: ctc.category,
+                description: ctc.description,
+                location: ctc.location
+              };
+            }));
           } else if (Array.isArray(call.args.timecodes)) {
             const chunkTimecodes = call.args.timecodes.filter((tc: any) => {
               const tcSecs = timeToSecs(tc.time);
