@@ -142,6 +142,8 @@ export default function App() {
   const [reanalysisEndTime, setReanalysisEndTime] = useState<string>('');
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [showModeSelection, setShowModeSelection] = useState(true);
+  const [deleteRangeStart, setDeleteRangeStart] = useState<string>('');
+  const [deleteRangeEnd, setDeleteRangeEnd] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<globalThis.File | null>(null);
@@ -1049,6 +1051,43 @@ ${basePrompt}
     scrollRef.current?.scrollTo({top: 0});
   };
 
+  // Tek bir transkript satırını silme
+  const handleDeleteTimecode = (index: number) => {
+    if (!timecodeList) return;
+    const updated = timecodeList.filter((_, i) => i !== index);
+    setTimecodeList(updated.length > 0 ? updated : null);
+  };
+
+  // Belirli zaman aralığındaki transkriptleri toplu silme
+  const handleDeleteRange = () => {
+    if (!timecodeList || !deleteRangeStart || !deleteRangeEnd) return;
+
+    const startSecs = parseTimeToSeconds(deleteRangeStart);
+    const endSecs = parseTimeToSeconds(deleteRangeEnd);
+
+    if (startSecs >= endSecs) {
+      setAnalysisError('Silme aralığı: Başlangıç zamanı bitiş zamanından küçük olmalıdır.');
+      return;
+    }
+
+    const countBefore = timecodeList.length;
+    const filtered = timecodeList.filter((tc: any) => {
+      const tcSecs = timeToSecs(tc.time);
+      return tcSecs < startSecs || tcSecs > endSecs;
+    });
+    const deletedCount = countBefore - filtered.length;
+
+    if (deletedCount === 0) {
+      setAnalysisWarning(`⚠️ ${deleteRangeStart} - ${deleteRangeEnd} aralığında silinecek transkript bulunamadı.`);
+    } else {
+      setTimecodeList(filtered.length > 0 ? filtered : null);
+      setAnalysisWarning(`🗑️ ${deleteRangeStart} - ${deleteRangeEnd} aralığındaki ${deletedCount} transkript silindi.`);
+    }
+
+    setDeleteRangeStart('');
+    setDeleteRangeEnd('');
+  };
+
 
   const handleReset = () => {
     setVidUrl(null);
@@ -1488,6 +1527,64 @@ ${basePrompt}
                   </div>
                 </div>
               </details>
+
+              {/* Aralık Silme Paneli */}
+              <details className="output-panel delete-range-panel">
+                <summary>
+                  <h3>Belirli Aralıktaki Transkriptleri Sil</h3>
+                  <span className="icon">delete_sweep</span>
+                  <span className="icon">expand_more</span>
+                </summary>
+                <div className="panel-content">
+                  <div className="reanalysis-form">
+                    <p>Belirli bir zaman aralığındaki tüm transkriptleri silmek için zaman kodlarını girin:</p>
+                    <div className="time-inputs">
+                      <div className="time-input-group">
+                        <label htmlFor="delete-start-time">Başlangıç Zamanı</label>
+                        <input
+                          id="delete-start-time"
+                          type="text"
+                          placeholder="00:02:00"
+                          value={deleteRangeStart}
+                          onChange={(e) => setDeleteRangeStart(e.target.value)}
+                        />
+                        <small>Format: SS:DD:SS veya DD:SS veya SS</small>
+                      </div>
+                      <div className="time-input-group">
+                        <label htmlFor="delete-end-time">Bitiş Zamanı</label>
+                        <input
+                          id="delete-end-time"
+                          type="text"
+                          placeholder="00:04:00"
+                          value={deleteRangeEnd}
+                          onChange={(e) => setDeleteRangeEnd(e.target.value)}
+                        />
+                        <small>Format: SS:DD:SS veya DD:SS veya SS</small>
+                      </div>
+                    </div>
+                    <div className="reanalysis-actions">
+                      <button
+                        className="button danger"
+                        onClick={handleDeleteRange}
+                        disabled={!deleteRangeStart || !deleteRangeEnd}
+                      >
+                        <span className="icon">delete_sweep</span>
+                        Aralığı Sil
+                      </button>
+                      <button
+                        className="button secondary small"
+                        onClick={() => {
+                          setDeleteRangeStart('');
+                          setDeleteRangeEnd('');
+                        }}
+                      >
+                        <span className="icon">clear</span>
+                        Temizle
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </details>
               
               {srtTranscript && (
                 <details className="output-panel">
@@ -1517,7 +1614,7 @@ ${basePrompt}
               
               <details className="output-panel transcript-panel" open>
                 <summary>
-                  <h3>Transkript</h3>
+                  <h3>Transkript ({timecodeList.length} satır)</h3>
                   <span className="icon">expand_more</span>
                 </summary>
                 <div className="panel-content">
@@ -1529,15 +1626,25 @@ ${basePrompt}
                           <th>Bitiş</th>
                           <th>Açıklama</th>
                           <th>Nesneler</th>
+                          <th className="delete-col"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {timecodeList.map(({time, text, objects, startTime, endTime}, i) => (
-                          <tr key={i} role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
-                            <td><time>{startTime || time}</time></td>
-                            <td><time>{endTime || '-'}</time></td>
-                            <td>{text}</td>
-                            <td>{objects?.join(', ')}</td>
+                          <tr key={i} className="deletable-row">
+                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}><time>{startTime || time}</time></td>
+                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}><time>{endTime || '-'}</time></td>
+                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>{text}</td>
+                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>{objects?.join(', ')}</td>
+                            <td className="delete-cell">
+                              <button
+                                className="delete-btn"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTimecode(i); }}
+                                title="Bu satırı sil"
+                              >
+                                <span className="icon">close</span>
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1552,10 +1659,17 @@ ${basePrompt}
                           : time;
                         
                         return (
-                          <li key={i} className="outputItem">
+                          <li key={i} className="outputItem deletable-row">
                             <button onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
                               <time>{displayTime}</time>
                               <p className="text">{text}</p>
+                            </button>
+                            <button
+                              className="delete-btn"
+                              onClick={() => handleDeleteTimecode(i)}
+                              title="Bu satırı sil"
+                            >
+                              <span className="icon">close</span>
                             </button>
                           </li>
                         );
@@ -1569,9 +1683,18 @@ ${basePrompt}
                           : time;
                         
                         return (
-                          <span key={i} className="sentence" role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
-                            <time>{displayTime}</time>
-                            <span>{text}</span>
+                          <span key={i} className="sentence deletable-row">
+                            <span role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
+                              <time>{displayTime}</time>
+                              <span>{text}</span>
+                            </span>
+                            <button
+                              className="delete-btn"
+                              onClick={() => handleDeleteTimecode(i)}
+                              title="Bu satırı sil"
+                            >
+                              <span className="icon">close</span>
+                            </button>
                           </span>
                         );
                       })}

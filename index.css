@@ -1699,6 +1699,116 @@ video {
   white-space: nowrap;
 }
 
+/* Transcript Delete Styles */
+.delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: none !important;
+}
+.delete-btn .icon {
+  font-size: 16px;
+}
+.deletable-row:hover .delete-btn,
+.deletable-row:focus-within .delete-btn {
+  opacity: 0.6;
+}
+.delete-btn:hover {
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #ef4444 !important;
+}
+.delete-btn:active {
+  transform: scale(0.9);
+}
+
+/* List mode delete button positioning */
+.panel-content ul .outputItem.deletable-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.panel-content ul .outputItem.deletable-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Table mode delete column */
+.delete-col {
+  width: 36px;
+}
+.delete-cell {
+  text-align: center;
+  width: 36px;
+  padding: 4px !important;
+}
+.panel-content tr.deletable-row {
+  transition: background-color 0.15s ease;
+}
+.panel-content tr.deletable-row:hover {
+  background-color: rgba(239, 68, 68, 0.03);
+}
+.panel-content tr.deletable-row td[role="button"] {
+  cursor: pointer;
+}
+
+/* Paragraph mode delete button */
+.paragraph-output .sentence.deletable-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  position: relative;
+}
+.paragraph-output .sentence.deletable-row .delete-btn {
+  width: 18px;
+  height: 18px;
+  min-height: 18px !important;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+.paragraph-output .sentence.deletable-row .delete-btn .icon {
+  font-size: 12px;
+}
+
+/* Danger button style for delete range */
+.button.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  color: white !important;
+  border: 1px solid #ef4444 !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3) !important;
+}
+.button.danger:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
+  transform: translateY(-1px);
+}
+.button.danger:disabled {
+  background: var(--secondary-button-bg) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+  transform: none;
+  cursor: not-allowed;
+}
+
+/* Delete range panel accent */
+.delete-range-panel summary {
+  border-left: 3px solid #ef4444;
+}
+
 /* Zaman aralığı gösterimi için */
 .panel-content time:has(+ time)::after,
 .outputItem time:contains(' - ')::after {
