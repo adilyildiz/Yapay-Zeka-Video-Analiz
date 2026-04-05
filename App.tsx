@@ -136,6 +136,8 @@ export default function App() {
   const [currentAPIConfig, setCurrentAPIConfig] = useState<APIConfig>(getCurrentConfig());
   const [currentProvider, setCurrentProvider] = useState<string>('Google Gemini');
   const [chunkDuration, setChunkDuration] = useState<number | 'all'>(60);
+  const [analysisRangeStart, setAnalysisRangeStart] = useState<string>('');
+  const [analysisRangeEnd, setAnalysisRangeEnd] = useState<string>('');
   const [reanalysisStartTime, setReanalysisStartTime] = useState<string>('');
   const [reanalysisEndTime, setReanalysisEndTime] = useState<string>('');
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -440,12 +442,23 @@ export default function App() {
     let CHUNK_DURATION_SECONDS: number;
     let numChunks: number;
     
+    // Analiz aralığı belirleme
+    const rangeStartSecs = analysisRangeStart ? parseTimeToSeconds(analysisRangeStart) : 0;
+    const rangeEndSecs = analysisRangeEnd ? parseTimeToSeconds(analysisRangeEnd) : videoDuration;
+    const analysisLength = rangeEndSecs - rangeStartSecs;
+    
+    if (analysisLength <= 0 || rangeStartSecs >= videoDuration) {
+      setAnalysisError('Geçersiz analiz aralığı. Başlangıç zamanı bitiş zamanından küçük olmalıdır.');
+      setIsLoading(false);
+      return;
+    }
+    
     if (chunkDuration === 'all') {
-      CHUNK_DURATION_SECONDS = videoDuration; // Tüm videoyu tek seferde işle
+      CHUNK_DURATION_SECONDS = analysisLength; // Seçilen aralığı tek seferde işle
       numChunks = 1;
     } else {
       CHUNK_DURATION_SECONDS = chunkDuration;
-      numChunks = Math.ceil(videoDuration / CHUNK_DURATION_SECONDS);
+      numChunks = Math.ceil(analysisLength / CHUNK_DURATION_SECONDS);
     }
     let allTimecodes: any[] = [];
     let overallError: string | null = null;
@@ -483,13 +496,27 @@ export default function App() {
       return;
     }
 
+    let previousChunkSummary = '';
+
     for (let i = 0; i < numChunks; i++) {
-        const startTime = i * CHUNK_DURATION_SECONDS;
-        const endTime = Math.min((i + 1) * CHUNK_DURATION_SECONDS, videoDuration);
+        const startTime = rangeStartSecs + i * CHUNK_DURATION_SECONDS;
+        const endTime = Math.min(rangeStartSecs + (i + 1) * CHUNK_DURATION_SECONDS, rangeEndSecs);
         
         setAnalysisProgress(
             `Parça ${i + 1}/${numChunks} analiz ediliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
         );
+
+        // Önceki parçanın bağlam bilgisi
+        const continuityContext = previousChunkSummary ? `
+### ÖNCEKİ PARÇANIN BAĞLAMI (TUTARLILIK İÇİN ÖNEMLİ)
+Aşağıda bir önceki video parçasının son olayları verilmiştir. Bu bağlamı kullanarak:
+- Aynı nesneleri, karakterleri ve öğeleri AYNI İSİMLERLE tanımla (örn: önceki parçada "mavi canavar" dediysen, bu parçada da "mavi canavar" de).
+- Devam eden olayları doğru şekilde bağla (örn: önceki parça bir menü açılmasıyla bittiyse, bu parça o menünün devamıyla başlamalı).
+- Tutarsız veya çelişkili açıklamalar yapma.
+- Önceki parçadaki olayları TEKRAR raporlama, sadece bağlam olarak kullan.
+
+${previousChunkSummary}
+` : '';
 
         // Mode-specific optimizations
         let chunkPrompt: string;
@@ -506,7 +533,7 @@ export default function App() {
 `;
         if (selectedMode === 'Detaylı Transkript') {
           chunkPrompt = `${timingInstructions}
-
+${continuityContext}
 ${basePrompt}
 
 - set_timecodes fonksiyonunu sonuçlarla çağır.
@@ -515,7 +542,7 @@ ${basePrompt}
 Şimdi analizinle fonksiyonu çağır.`;
         } else {
           chunkPrompt = `${timingInstructions}
-
+${continuityContext}
 ${basePrompt}
 
 - set_timecodes fonksiyonunu sonuçlarla çağır.
@@ -571,7 +598,7 @@ ${basePrompt}
               const chunkDur = endTime - startTime;
               finalPrompt = `Bu video parçası, orijinal videonun ${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)} arasındaki bölümüdür.
 Bu parçanın süresi: ${Math.round(chunkDur)} saniye.
-
+${continuityContext}
 ${basePrompt}
 
 ### ZAMAN DAMGASI TALİMATLARI (KRİTİK)
@@ -644,6 +671,19 @@ ${basePrompt}
                     }
                     
                     allTimecodes = allTimecodes.concat(chunkTimecodes);
+
+                    // Sonraki parça için bağlam özeti oluştur (son 5 olayı al)
+                    if (chunkTimecodes.length > 0) {
+                      const lastEvents = chunkTimecodes.slice(-5);
+                      previousChunkSummary = `Önceki parça (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)}) son olayları:\n` +
+                        lastEvents.map((tc: any) => {
+                          const time = tc.startTime || tc.time;
+                          const endT = tc.endTime ? ` - ${tc.endTime}` : '';
+                          const cat = tc.category ? ` [${Array.isArray(tc.category) ? tc.category.join(', ') : tc.category}]` : '';
+                          const desc = tc.description || tc.text || '';
+                          return `- ${time}${endT}${cat}: ${desc}`;
+                        }).join('\n');
+                    }
                 } else {
                     console.error(`Invalid arguments for function call in chunk ${i+1}:`, call.args);
                     overallError = (overallError || '') + `Parça ${i + 1} için geçersiz argümanlar alındı. `;
@@ -968,6 +1008,8 @@ ${basePrompt}
     setReanalysisStartTime('');
     setReanalysisEndTime('');
     setIsReanalyzing(false);
+    setAnalysisRangeStart('');
+    setAnalysisRangeEnd('');
     setShowModeSelection(true);
     setStep('upload');
   };
@@ -1190,10 +1232,68 @@ ${basePrompt}
                 {chunkDuration === 'all' ? (
                   <p>⚡ Tüm video tek seferde işlenecek (hızlı ama daha az detaylı)</p>
                 ) : (
-                  <p>📊 Video {chunkDuration}s parçalara bölünecek ({Math.ceil(videoDuration / (chunkDuration as number))} parça)</p>
+                  <p>📊 Video {chunkDuration}s parçalara bölünecek ({(() => {
+                    const rangeStart = analysisRangeStart ? parseTimeToSeconds(analysisRangeStart) : 0;
+                    const rangeEnd = analysisRangeEnd ? parseTimeToSeconds(analysisRangeEnd) : videoDuration;
+                    const len = rangeEnd - rangeStart;
+                    return Math.ceil(len / (chunkDuration as number));
+                  })()} parça)</p>
                 )}
               </div>
             </div>
+
+            {/* Analiz Aralığı Seçimi */}
+            {videoDuration > 0 && (
+              <div className="setting-group">
+                <label className="setting-label">
+                  <span className="icon">content_cut</span>
+                  Analiz Aralığı (isteğe bağlı)
+                </label>
+                <p className="setting-description">
+                  Videonun sadece belirli bir bölümünü analiz etmek için başlangıç ve bitiş zamanı girin. Boş bırakırsanız tüm video analiz edilir.
+                </p>
+                <div className="time-inputs">
+                  <div className="time-input-group">
+                    <label>Başlangıç</label>
+                    <input
+                      type="text"
+                      placeholder="00:00:00"
+                      value={analysisRangeStart}
+                      onChange={(e) => setAnalysisRangeStart(e.target.value)}
+                    />
+                    <small>Format: SS:DD:SS veya DD:SS veya SS</small>
+                  </div>
+                  <div className="time-input-group">
+                    <label>Bitiş</label>
+                    <input
+                      type="text"
+                      placeholder={formatSecondsToHHMMSS(videoDuration)}
+                      value={analysisRangeEnd}
+                      onChange={(e) => setAnalysisRangeEnd(e.target.value)}
+                    />
+                    <small>Format: SS:DD:SS veya DD:SS veya SS</small>
+                  </div>
+                </div>
+                {(analysisRangeStart || analysisRangeEnd) && (
+                  <div className="chunk-info">
+                    <p>🎯 Analiz aralığı: {analysisRangeStart || '00:00:00'} → {analysisRangeEnd || formatSecondsToHHMMSS(videoDuration)}
+                      {' '}({(() => {
+                        const s = analysisRangeStart ? parseTimeToSeconds(analysisRangeStart) : 0;
+                        const e = analysisRangeEnd ? parseTimeToSeconds(analysisRangeEnd) : videoDuration;
+                        return formatSecondsToHHMMSS(e - s);
+                      })()} süre)
+                    </p>
+                    <button
+                      className="button secondary small"
+                      onClick={() => { setAnalysisRangeStart(''); setAnalysisRangeEnd(''); }}
+                      style={{ marginTop: '4px' }}
+                    >
+                      <span className="icon">clear</span> Tüm Videoyu Analiz Et
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="navigation-buttons bottom">
