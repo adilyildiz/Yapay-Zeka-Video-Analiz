@@ -230,7 +230,8 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
 - Oyuncunun YAPMADIĞI eylemler de önemlidir (örn: tıklamaması gereken yere tıklamaması = başarılı inhibisyon). Sadece yapılan eylemleri değil, yapılmayan ama beklenen/kaçınılan eylemleri de raporla.
 
 ### 6. Zamanlama ve Format Kuralları
-- **Olayları Gruplama:** Olayları gruplama. Her bir olayı ayrı ayrı raporla.
+- **Olayları Gruplama:** Eğer 2 saniyeden kısa bir zaman aralığında birden fazla olay oluşuyorsa (örn: tıklama + puan belirmesi + nesne kaybolması hep aynı anda), bu olayları TEK BİR kayıt altında gruplayabilirsin. Gruplanmış olayda tüm olayları description alanında ayrı ayrı açıkla ve tüm ilgili kategorileri ekle. startTime grubun ilk olayının başlangıcı, endTime grubun son olayının GERÇEK bitiş zamanı olmalıdır. 2 saniyeden uzun aralıklı olayları GRUPLAMA — ayrı raporla.
+- **GERÇEK BİTİŞ ZAMANI ZORUNLULUĞU:** \`endTime\` değerini asla uydurma veya kısaltma. Her olayın ekranda gerçekte ne kadar sürdüğünü gözlemle ve endTime'ı buna göre yaz. Bir nesne ekranda 1.5 saniye kalıyorsa endTime = startTime + 1.5s olmalıdır. Olayın bitiş zamanını startTime'a çok yakın bir değer yaparak "geçiştirme" — gerçek süreyi yansıt.
 - **Konum Belirleme:** Her olayın ekrandaki konumunu mutlaka belirt (örn: "sol üst köşe", "ekran ortası", "sağ alt bölge").
 - **Mutlak Zaman:** Tüm zaman kodları (startTime ve endTime) videonun başlangıcından (00:00:00.0) itibaren hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma.
 - **Videonun Oynatma Zamanını Kullan:** Zaman damgalarını belirlerken videonun gerçek oynatma zamanını gözlemle. Video içeriğinde görünen sayaçları, süre göstergelerini veya zamanlayıcıları video zamanı olarak KULLANMA — bunlar içerik zamanıdır, video zamanı değil.
