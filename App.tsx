@@ -29,21 +29,12 @@ import modes from './modes';
 import {generateSrt, timeToSecs} from './utils';
 import VideoPlayer from './VideoPlayer.jsx';
 
-// Cookie yardımcı fonksiyonları
-function setCookie(name: string, value: string, days = 365) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
-}
-
-function getCookie(name: string) {
-  return document.cookie.split('; ').reduce((r, v) => {
-    const parts = v.split('=');
-    return parts[0] === name ? decodeURIComponent(parts[1]) : r;
-  }, '');
-}
-
-// Mode ayarlarını kaydet
-function saveModePreferences(mode: string, customPrompt: string, chartMode: string, chartPrompt: string, categoricalMode: string, categoricalPrompt: string) {
+// Mode ayarlarını kaydet (localStorage)
+function saveModePreferences(
+  mode: string, customPrompt: string, chartMode: string, chartPrompt: string,
+  categoricalMode: string, categoricalPrompt: string,
+  chunkDuration: number | 'all', ollamaSendMode: 'frame' | 'video'
+) {
   const preferences = {
     selectedMode: mode,
     customPrompt,
@@ -51,26 +42,18 @@ function saveModePreferences(mode: string, customPrompt: string, chartMode: stri
     chartPrompt,
     categoricalMode,
     categoricalPrompt,
+    chunkDuration,
+    ollamaSendMode,
   };
   localStorage.setItem('modePreferences', JSON.stringify(preferences));
 }
 
-// Mode ayarlarını yükle
+// Mode ayarlarını yükle (localStorage)
 function loadModePreferences() {
-  // Önce localStorage'dan oku (saveModePreferences buraya yazıyor)
-  const lsValue = localStorage.getItem('modePreferences');
-  if (lsValue) {
+  const value = localStorage.getItem('modePreferences');
+  if (value) {
     try {
-      return JSON.parse(lsValue);
-    } catch {
-      // devam et
-    }
-  }
-  // Fallback: eski cookie'den oku
-  const cookieValue = getCookie('mode_preferences');
-  if (cookieValue) {
-    try {
-      return JSON.parse(cookieValue);
+      return JSON.parse(value);
     } catch {
       return null;
     }
@@ -102,7 +85,7 @@ function sendNotification(title: string, body: string) {
 }
 
 export default function App() {
-  // Cookie'den mode preferences'ları yükle
+  // localStorage'dan mode preferences'ları yükle
   const savedPreferences = loadModePreferences();
   
   const [vidUrl, setVidUrl] = useState<string | null>(null);
@@ -135,7 +118,7 @@ export default function App() {
   const [isAPISettingsOpen, setIsAPISettingsOpen] = useState(false);
   const [currentAPIConfig, setCurrentAPIConfig] = useState<APIConfig>(getCurrentConfig());
   const [currentProvider, setCurrentProvider] = useState<string>('Google Gemini');
-  const [chunkDuration, setChunkDuration] = useState<number | 'all'>(60);
+  const [chunkDuration, setChunkDuration] = useState<number | 'all'>(savedPreferences?.chunkDuration ?? 60);
   const [analysisRangeStart, setAnalysisRangeStart] = useState<string>('');
   const [analysisRangeEnd, setAnalysisRangeEnd] = useState<string>('');
   const [reanalysisStartTime, setReanalysisStartTime] = useState<string>('');
@@ -144,11 +127,13 @@ export default function App() {
   const [showModeSelection, setShowModeSelection] = useState(true);
   const [deleteRangeStart, setDeleteRangeStart] = useState<string>('');
   const [deleteRangeEnd, setDeleteRangeEnd] = useState<string>('');
+  const [ollamaSendMode, setOllamaSendMode] = useState<'frame' | 'video'>(savedPreferences?.ollamaSendMode || 'frame');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<globalThis.File | null>(null);
   // FIX: Changed HTMLElement to HTMLDivElement to match the element type it's referencing.
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cancelAnalysisRef = useRef<boolean>(false);
   const isCustomMode = selectedMode === 'Özel';
   const isChartMode = selectedMode === 'Grafik';
   const isCategoricalMode = selectedMode === 'Kategorik Süreç Transkripti';
@@ -158,8 +143,33 @@ export default function App() {
   
   const handleAPIConfigChange = (config: APIConfig) => {
     setCurrentAPIConfig(config);
-    setCurrentProvider(config.provider === APIProvider.GEMINI ? 'Google Gemini' : 'Ollama');
+    setCurrentProvider(
+      config.provider === APIProvider.GEMINI ? 'Google Gemini' :
+      config.provider === APIProvider.OPENAI ? 'OpenAI API' : 'Ollama'
+    );
   };
+
+  const getActiveModelName = () => {
+    if (currentAPIConfig.provider === APIProvider.GEMINI) {
+      return currentAPIConfig.gemini?.model || 'gemini-2.5-flash';
+    }
+    if (currentAPIConfig.provider === APIProvider.OPENAI) {
+      return currentAPIConfig.openai?.model || 'gpt-4o';
+    }
+    return currentAPIConfig.ollama?.model || 'ollama';
+  };
+
+  const renderModelBadge = () => (
+    <button
+      className="model-badge-btn"
+      onClick={() => setIsAPISettingsOpen(true)}
+      title="Yapay zeka modelini değiştir"
+    >
+      <span className="icon">smart_toy</span>
+      <span className="model-name">{getActiveModelName()}</span>
+      <span className="icon">edit</span>
+    </button>
+  );
 
   useEffect(() => {
     document.documentElement.className = 'dark';
@@ -170,19 +180,22 @@ export default function App() {
     }
   }, []);
 
-  // İlk yüklemede API config'i cookie'den yükle
+  // İlk yüklemede API config'i localStorage'dan yükle
   useEffect(() => {
     console.log('App yüklendi, API config yükleniyor...');
     const loadedConfig = getCurrentConfig();
     console.log('Yüklenen config:', loadedConfig);
     setCurrentAPIConfig(loadedConfig);
-    setCurrentProvider(loadedConfig.provider === APIProvider.GEMINI ? 'Google Gemini' : 'Ollama');
+    setCurrentProvider(
+      loadedConfig.provider === APIProvider.GEMINI ? 'Google Gemini' :
+      loadedConfig.provider === APIProvider.OPENAI ? 'OpenAI API' : 'Ollama'
+    );
   }, []);
 
-  // Mode preferences'ları cookie'ye kaydet
+  // Mode preferences'ları localStorage'a kaydet
   useEffect(() => {
-    saveModePreferences(selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt);
-  }, [selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt]);
+    saveModePreferences(selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt, chunkDuration, ollamaSendMode);
+  }, [selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt, chunkDuration, ollamaSendMode]);
 
   // İlk yüklemede submode gerektiren mod varsa, direkt submode ekranına geç
   useEffect(() => {
@@ -362,8 +375,8 @@ export default function App() {
     // Orijinal dosyayı sakla — Gemini'ye yükleme analiz aşamasında yapılacak
     fileRef.current = fileToUpload;
 
-    // Ollama için hemen yükle (frame extraction gerektirir)
-    if (currentAPIConfig.provider === APIProvider.OLLAMA) {
+    // Ollama ve OpenAI için hemen yükle (frame extraction gerektirir)
+    if (currentAPIConfig.provider === APIProvider.OLLAMA || currentAPIConfig.provider === APIProvider.OPENAI) {
       try {
         const res = await uploadFile(fileToUpload);
         setFile(res);
@@ -413,6 +426,7 @@ export default function App() {
   const handleGenerate = async () => {
     if (!fileRef.current || !videoDuration) return;
 
+    cancelAnalysisRef.current = false;
     setAnalysisError(null);
     setAnalysisWarning(null);
     setDebugInfo(null);
@@ -501,6 +515,9 @@ export default function App() {
     let previousChunkSummary = '';
 
     for (let i = 0; i < numChunks; i++) {
+        // İptal kontrolü
+        if (cancelAnalysisRef.current) break;
+
         const startTime = rangeStartSecs + i * CHUNK_DURATION_SECONDS;
         const endTime = Math.min(rangeStartSecs + (i + 1) * CHUNK_DURATION_SECONDS, rangeEndSecs);
         
@@ -566,11 +583,13 @@ ${basePrompt}
                     `Parça ${i + 1}/${numChunks} kesiliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
                   );
                   const sliced = await sliceVideo(originalFile, startTime, endTime);
+                  if (cancelAnalysisRef.current) break;
                   console.log(`Video chunk ${i + 1} kesildi: ${sliced.size} bytes`);
                   setAnalysisProgress(
                     `Parça ${i + 1}/${numChunks} yükleniyor...`
                   );
                   chunkFile = await uploadFile(sliced);
+                  if (cancelAnalysisRef.current) break;
                   useChunkLocalTime = true;
                   console.log(`Video chunk ${i + 1} Gemini'ye yüklendi`);
                 } catch (sliceError) {
@@ -579,17 +598,80 @@ ${basePrompt}
                 }
               }
             }
-            // Ollama için chunk'a özgü frame extraction
+            // Ollama için chunk'a özgü işleme
             else if (currentAPIConfig.provider === APIProvider.OLLAMA && file && 'name' in file) {
               const originalFile = fileRef.current;
               if (originalFile && originalFile.type.startsWith('video/')) {
-                const midTime = (startTime + endTime) / 2;
-                try {
-                  const { extractOllamaFrameAtTime } = await import('./api');
-                  chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
-                  console.log(`Extracted frame at ${midTime}s for chunk ${i + 1}`);
-                } catch (frameError) {
-                  console.warn('Frame extraction failed, using original file:', frameError);
+                if (ollamaSendMode === 'video') {
+                  // Video segment modu: kesilmiş video parçasını gönder
+                  try {
+                    setAnalysisProgress(
+                      `Parça ${i + 1}/${numChunks} video kesiliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
+                    );
+                    const sliced = await sliceVideo(originalFile, startTime, endTime);
+                    if (cancelAnalysisRef.current) break;
+                    const { prepareOllamaVideoSegment } = await import('./api');
+                    chunkFile = await prepareOllamaVideoSegment(sliced);
+                    useChunkLocalTime = true;
+                    console.log(`Video segment prepared for Ollama chunk ${i + 1}: ${sliced.size} bytes`);
+                  } catch (videoError) {
+                    console.warn('Video segment preparation failed, falling back to frame:', videoError);
+                    // Fallback: frame extraction
+                    const midTime = (startTime + endTime) / 2;
+                    try {
+                      const { extractOllamaFrameAtTime } = await import('./api');
+                      chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
+                    } catch (frameError) {
+                      console.warn('Frame extraction also failed:', frameError);
+                    }
+                  }
+                } else {
+                  // Frame modu: ortadaki frame'i gönder
+                  const midTime = (startTime + endTime) / 2;
+                  try {
+                    const { extractOllamaFrameAtTime } = await import('./api');
+                    chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
+                    console.log(`Extracted frame at ${midTime}s for chunk ${i + 1}`);
+                  } catch (frameError) {
+                    console.warn('Frame extraction failed, using original file:', frameError);
+                  }
+                }
+              }
+            }
+            // OpenAI için chunk'a özgü işleme
+            else if (currentAPIConfig.provider === APIProvider.OPENAI && file && 'name' in file) {
+              const originalFile = fileRef.current;
+              if (originalFile && originalFile.type.startsWith('video/')) {
+                if (ollamaSendMode === 'video') {
+                  try {
+                    setAnalysisProgress(
+                      `Parça ${i + 1}/${numChunks} çoklu kare çıkarılıyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
+                    );
+                    const sliced = await sliceVideo(originalFile, startTime, endTime);
+                    if (cancelAnalysisRef.current) break;
+                    const { prepareOpenAIVideoSegment } = await import('./api');
+                    chunkFile = await prepareOpenAIVideoSegment(sliced);
+                    useChunkLocalTime = true;
+                    console.log(`Multi-frame prepared for OpenAI chunk ${i + 1}`);
+                  } catch (videoError) {
+                    console.warn('Multi-frame preparation failed, falling back to single frame:', videoError);
+                    const midTime = (startTime + endTime) / 2;
+                    try {
+                      const { extractOpenAIFrameAtTime } = await import('./api');
+                      chunkFile = await extractOpenAIFrameAtTime(originalFile, midTime);
+                    } catch (frameError) {
+                      console.warn('Frame extraction also failed:', frameError);
+                    }
+                  }
+                } else {
+                  const midTime = (startTime + endTime) / 2;
+                  try {
+                    const { extractOpenAIFrameAtTime } = await import('./api');
+                    chunkFile = await extractOpenAIFrameAtTime(originalFile, midTime);
+                    console.log(`Extracted frame at ${midTime}s for OpenAI chunk ${i + 1}`);
+                  } catch (frameError) {
+                    console.warn('Frame extraction failed for OpenAI:', frameError);
+                  }
                 }
               }
             }
@@ -629,6 +711,7 @@ ${basePrompt}
             }
             
             const resp = await generateContent(finalPrompt, functions, chunkFile);
+            if (cancelAnalysisRef.current) break;
             lastDebugInfo = resp;
             let call = resp.functionCalls?.[0];
 
@@ -720,13 +803,17 @@ ${basePrompt}
         }
     }
 
+    if (cancelAnalysisRef.current) {
+      overallWarning = `⏹️ Analiz kullanıcı tarafından durduruldu. ${allTimecodes.length} zaman kodu toplandı.`;
+    }
+
     if (allTimecodes.length > 0) {
         allTimecodes.sort((a, b) => timeToSecs(a.time) - timeToSecs(b.time));
         const uniqueTimecodes = allTimecodes.filter((tc, index, self) => 
             index === self.findIndex((t) => (t.time === tc.time && t.text === tc.text && t.value === tc.value))
         );
         setTimecodeList(uniqueTimecodes);
-    } else if (!overallError) {
+    } else if (!overallError && !cancelAnalysisRef.current) {
         setAnalysisError('Analiz tamamlandı ancak bu mod için gösterilecek bir sonuç üretilemedi. Modelin parçalara ayrılmış videodan veri çıkaramamış olması olabilir.');
     }
 
@@ -758,7 +845,7 @@ ${basePrompt}
     }
   };
 
-  const handleReanalysis = async () => {
+  const handleReanalysis = async (withContext: boolean = true) => {
     if (!fileRef.current || !reanalysisStartTime || !reanalysisEndTime) return;
 
     const startSeconds = parseTimeToSeconds(reanalysisStartTime);
@@ -777,6 +864,7 @@ ${basePrompt}
     setAnalysisError(null);
     setAnalysisWarning(null);
     setIsReanalyzing(true);
+    cancelAnalysisRef.current = false;
 
     const duration = endSeconds - startSeconds;
     let chunkSize = chunkDuration === 'all' ? duration : Math.min(chunkDuration as number, duration);
@@ -810,7 +898,7 @@ ${basePrompt}
 
     // Önceki analiz sonuçlarını bağlam olarak hazırla
     let previousAnalysisContext = '';
-    if (timecodeList && timecodeList.length > 0) {
+    if (withContext && timecodeList && timecodeList.length > 0) {
       // Yeniden analiz edilen aralıktaki mevcut sonuçları örnek olarak gönder
       const relevantTimecodes = timecodeList.filter((tc: any) => {
         const tcSecs = timeToSecs(tc.time);
@@ -879,6 +967,8 @@ ${contextAfter.map(formatEventForContext).join('\n')}
       : 'set_timecodes fonksiyonunu sonuçlarla çağır.';
 
     for (let i = 0; i < numChunks; i++) {
+      if (cancelAnalysisRef.current) break;
+
       const chunkStart = startSeconds + (i * chunkSize);
       const chunkEnd = Math.min(startSeconds + ((i + 1) * chunkSize), endSeconds);
 
@@ -922,28 +1012,90 @@ ${basePrompt}
                 `Parça ${i + 1}/${numChunks} kesiliyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
               );
               const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+              if (cancelAnalysisRef.current) break;
               console.log(`Reanalysis chunk ${i + 1} kesildi: ${sliced.size} bytes`);
               setAnalysisProgress(
                 `Parça ${i + 1}/${numChunks} yükleniyor...`
               );
               chunkFile = await uploadFile(sliced);
+              if (cancelAnalysisRef.current) break;
               useChunkLocalTime = true;
             } catch (sliceError) {
               console.warn('Video kesme başarısız (reanalysis), tam video kullanılacak:', sliceError);
             }
           }
         }
-        // Ollama için chunk'a özgü frame extraction
+        // Ollama için chunk'a özgü işleme
         else if (currentAPIConfig.provider === APIProvider.OLLAMA && file && 'name' in file) {
           const originalFile = fileRef.current;
           if (originalFile && originalFile.type.startsWith('video/')) {
-            const midTime = (chunkStart + chunkEnd) / 2;
-            try {
-              const { extractOllamaFrameAtTime } = await import('./api');
-              chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
-              console.log(`Extracted frame at ${midTime}s for reanalysis chunk ${i + 1}`);
-            } catch (frameError) {
-              console.warn('Frame extraction failed for reanalysis, using original file:', frameError);
+            if (ollamaSendMode === 'video') {
+              // Video segment modu
+              try {
+                setAnalysisProgress(
+                  `Parça ${i + 1}/${numChunks} video kesiliyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
+                );
+                const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+                if (cancelAnalysisRef.current) break;
+                const { prepareOllamaVideoSegment } = await import('./api');
+                chunkFile = await prepareOllamaVideoSegment(sliced);
+                useChunkLocalTime = true;
+                console.log(`Video segment prepared for Ollama reanalysis chunk ${i + 1}: ${sliced.size} bytes`);
+              } catch (videoError) {
+                console.warn('Video segment preparation failed for reanalysis, falling back to frame:', videoError);
+                const midTime = (chunkStart + chunkEnd) / 2;
+                try {
+                  const { extractOllamaFrameAtTime } = await import('./api');
+                  chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
+                } catch (frameError) {
+                  console.warn('Frame extraction failed for reanalysis:', frameError);
+                }
+              }
+            } else {
+              // Frame modu
+              const midTime = (chunkStart + chunkEnd) / 2;
+              try {
+                const { extractOllamaFrameAtTime } = await import('./api');
+                chunkFile = await extractOllamaFrameAtTime(originalFile, midTime);
+                console.log(`Extracted frame at ${midTime}s for reanalysis chunk ${i + 1}`);
+              } catch (frameError) {
+                console.warn('Frame extraction failed for reanalysis, using original file:', frameError);
+              }
+            }
+          }
+        }
+        // OpenAI için chunk'a özgü işleme
+        else if (currentAPIConfig.provider === APIProvider.OPENAI && file && 'name' in file) {
+          const originalFile = fileRef.current;
+          if (originalFile && originalFile.type.startsWith('video/')) {
+            if (ollamaSendMode === 'video') {
+              try {
+                setAnalysisProgress(
+                  `Parça ${i + 1}/${numChunks} çoklu kare çıkarılıyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
+                );
+                const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+                if (cancelAnalysisRef.current) break;
+                const { prepareOpenAIVideoSegment } = await import('./api');
+                chunkFile = await prepareOpenAIVideoSegment(sliced);
+                useChunkLocalTime = true;
+              } catch (videoError) {
+                console.warn('Multi-frame preparation failed for reanalysis:', videoError);
+                const midTime = (chunkStart + chunkEnd) / 2;
+                try {
+                  const { extractOpenAIFrameAtTime } = await import('./api');
+                  chunkFile = await extractOpenAIFrameAtTime(originalFile, midTime);
+                } catch (frameError) {
+                  console.warn('Frame extraction failed for OpenAI reanalysis:', frameError);
+                }
+              }
+            } else {
+              const midTime = (chunkStart + chunkEnd) / 2;
+              try {
+                const { extractOpenAIFrameAtTime } = await import('./api');
+                chunkFile = await extractOpenAIFrameAtTime(originalFile, midTime);
+              } catch (frameError) {
+                console.warn('Frame extraction failed for OpenAI reanalysis:', frameError);
+              }
             }
           }
         }
@@ -983,6 +1135,7 @@ ${basePrompt}
         }
 
         const resp = await generateContent(finalPrompt, functions, chunkFile);
+        if (cancelAnalysisRef.current) break;
         let call = resp.functionCalls?.[0];
 
         if (!call && resp.candidates?.[0]?.finishReason === 'MALFORMED_FUNCTION_CALL') {
@@ -1039,9 +1192,15 @@ ${basePrompt}
       combinedTimecodes.sort((a, b) => timeToSecs(a.time) - timeToSecs(b.time));
       
       setTimecodeList(combinedTimecodes);
-      setAnalysisWarning(`✅ ${reanalysisStartTime} - ${reanalysisEndTime} aralığı başarıyla yeniden analiz edildi. ${reanalysisTimecodes.length} yeni zaman kodu eklendi.`);
-    } else {
+      if (cancelAnalysisRef.current) {
+        setAnalysisWarning(`⏹️ Yeniden analiz durduruldu. ${reanalysisTimecodes.length} zaman kodu toplandı.`);
+      } else {
+        setAnalysisWarning(`✅ ${reanalysisStartTime} - ${reanalysisEndTime} aralığı başarıyla yeniden analiz edildi. ${reanalysisTimecodes.length} yeni zaman kodu eklendi.`);
+      }
+    } else if (!cancelAnalysisRef.current) {
       setAnalysisError(reanalysisError || 'Yeniden analiz sonucu üretilemedi.');
+    } else {
+      setAnalysisWarning('⏹️ Yeniden analiz durduruldu. Henüz veri toplanamamıştı.');
     }
 
     setIsReanalyzing(false);
@@ -1090,31 +1249,48 @@ ${basePrompt}
 
 
   const handleReset = () => {
+    // localStorage'dan kaydedilmiş tercihleri yükle
+    const saved = loadModePreferences();
+    
+    // Video ile ilgili state'leri sıfırla
     setVidUrl(null);
     setFile(null);
     setFileName('');
     setTimecodeList(null);
     setRequestedTimecode(null);
-    setSelectedMode('Detaylı Transkript');
     setActiveMode(undefined);
     setIsLoading(false);
     setVideoError(false);
-    setCustomPrompt('');
-    setChartPrompt('');
-    setChartMode(chartModes[0]);
-    setCategoricalPrompt('');
-    setCategoricalMode(categoricalModes[0]);
     setSrtTranscript('');
     setAnalysisError(null);
     setAnalysisWarning(null);
     setDebugInfo(null);
-    setChunkDuration(30);
     setReanalysisStartTime('');
     setReanalysisEndTime('');
     setIsReanalyzing(false);
     setAnalysisRangeStart('');
     setAnalysisRangeEnd('');
-    setShowModeSelection(true);
+    setDeleteRangeStart('');
+    setDeleteRangeEnd('');
+
+    // Mod ayarlarını localStorage'dan geri yükle (sıfırlama yerine)
+    setSelectedMode(saved?.selectedMode || 'Detaylı Transkript');
+    setCustomPrompt(saved?.customPrompt || '');
+    setChartPrompt(saved?.chartPrompt || '');
+    setChartMode(saved?.chartMode || chartModes[0]);
+    setCategoricalPrompt(saved?.categoricalPrompt || '');
+    setCategoricalMode(saved?.categoricalMode || categoricalModes[0]);
+    setChunkDuration(saved?.chunkDuration ?? 60);
+    setOllamaSendMode(saved?.ollamaSendMode || 'frame');
+
+    // Mod seçim ekranını belirle
+    const restoredMode = saved?.selectedMode || 'Detaylı Transkript';
+    if (restoredMode === 'Özel' || restoredMode === 'Grafik' || restoredMode === 'Kategorik Süreç Transkripti') {
+      setShowModeSelection(false);
+    } else {
+      setShowModeSelection(true);
+    }
+    
     setStep('upload');
   };
 
@@ -1177,6 +1353,8 @@ ${basePrompt}
               <div className="provider-description">
                 {currentAPIConfig.provider === APIProvider.GEMINI ? (
                   <p>Google Gemini API kullanılıyor. Güçlü video analizi yetenekleri sunar.</p>
+                ) : currentAPIConfig.provider === APIProvider.OPENAI ? (
+                  <p>OpenAI uyumlu API kullanılıyor. Video frame'leri analiz ederek sonuç üretir.</p>
                 ) : (
                   <p>Ollama yerel AI kullanılıyor. Video frame'leri analiz ederek sonuç üretir.</p>
                 )}
@@ -1192,7 +1370,10 @@ ${basePrompt}
     <div className="step-container mode-step">
       <div className="mode-panel">
         <div className="mode-header">
-          <h1>Analiz Modunu Seçin</h1>
+          <div className="mode-header-top">
+            <h1>Analiz Modunu Seçin</h1>
+            {renderModelBadge()}
+          </div>
           <p>Videonuz için istediğiniz analiz türünü seçin.</p>
           {fileName && (
             <div className="filename">
@@ -1313,7 +1494,9 @@ ${basePrompt}
               </p>
               <div className="chunk-duration-options">
                 {[
-                  { value: 20, label: '20s', desc: 'Çok Detaylı' },
+                  { value: 10, label: '10s', desc: 'Çok Çok Çok Detaylı' },
+                  { value: 20, label: '20s', desc: 'Çok Çok Detaylı' },                  
+                  { value: 30, label: '30s', desc: 'Çok Detaylı' },
                   { value: 40, label: '40s', desc: 'Detaylı' },
                   { value: 60, label: '60s', desc: 'Standart' },
                   { value: 120, label: '120s', desc: 'Hızlı' },
@@ -1345,6 +1528,42 @@ ${basePrompt}
                 )}
               </div>
             </div>
+
+            {/* Yerel API Gönderim Modu (Ollama / OpenAI) */}
+            {(currentAPIConfig.provider === APIProvider.OLLAMA || currentAPIConfig.provider === APIProvider.OPENAI) && (
+              <div className="setting-group">
+                <label className="setting-label">
+                  <span className="icon">videocam</span>
+                  Görüntü Gönderim Modu
+                </label>
+                <p className="setting-description">
+                  AI'ya her parça için tek bir kare mi yoksa çoklu kare mi gönderilsin?
+                </p>
+                <div className="chunk-duration-options">
+                  <button
+                    className={c('chunk-option', { active: ollamaSendMode === 'frame' })}
+                    onClick={() => setOllamaSendMode('frame')}
+                  >
+                    <strong>🖼️ Kare</strong>
+                    <span>Hızlı, düşük bellek</span>
+                  </button>
+                  <button
+                    className={c('chunk-option', { active: ollamaSendMode === 'video' })}
+                    onClick={() => setOllamaSendMode('video')}
+                  >
+                    <strong>🎬 Çoklu Kare</strong>
+                    <span>Detaylı, yüksek bellek</span>
+                  </button>
+                </div>
+                <div className="chunk-info">
+                  {ollamaSendMode === 'frame' ? (
+                    <p>🖼️ Her parçanın ortasından tek bir kare çıkarılıp gönderilecek (hızlı, tüm modeller destekler)</p>
+                  ) : (
+                    <p>🎬 Her parçadan çoklu kare çıkarılıp birlikte gönderilecek (daha detaylı analiz, daha yavaş)</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Analiz Aralığı Seçimi */}
             {videoDuration > 0 && (
@@ -1424,6 +1643,7 @@ ${basePrompt}
       <div className="results-header">
         <h1>Analiz Sonuçları</h1>
         <div className="navigation-buttons">
+          {renderModelBadge()}
           <button className="button secondary" onClick={() => setStep('mode')}>
             <span className="icon">arrow_back</span> Mod Değiştir
           </button>
@@ -1495,14 +1715,46 @@ ${basePrompt}
                         <small>Format: SS:DD:SS veya DD:SS veya SS</small>
                       </div>
                     </div>
+                    <div className="reanalysis-chunk-duration">
+                      <label>Parça Süresi</label>
+                      <div className="chunk-buttons-inline">
+                        {[10, 20, 30, 60].map((d) => (
+                          <button
+                            key={d}
+                            className={`chunk-btn-sm${chunkDuration === d ? ' active' : ''}`}
+                            onClick={() => setChunkDuration(d)}
+                            disabled={isReanalyzing}
+                          >
+                            {d}s
+                          </button>
+                        ))}
+                        <button
+                          className={`chunk-btn-sm${chunkDuration === 'all' ? ' active' : ''}`}
+                          onClick={() => setChunkDuration('all')}
+                          disabled={isReanalyzing}
+                        >
+                          Tümü
+                        </button>
+                      </div>
+                    </div>
                     <div className="reanalysis-actions">
                       <button
                         className="button"
-                        onClick={handleReanalysis}
+                        onClick={() => handleReanalysis(true)}
                         disabled={isReanalyzing || !reanalysisStartTime || !reanalysisEndTime}
+                        title="Önceki analiz sonuçları bağlam olarak gönderilir"
                       >
                         <span className="icon">{isReanalyzing ? 'hourglass_empty' : 'analytics'}</span>
-                        {isReanalyzing ? 'Analiz Ediliyor...' : 'Yeniden Analiz Et'}
+                        {isReanalyzing ? 'Analiz Ediliyor...' : 'Bağlamlı Analiz'}
+                      </button>
+                      <button
+                        className="button secondary"
+                        onClick={() => handleReanalysis(false)}
+                        disabled={isReanalyzing || !reanalysisStartTime || !reanalysisEndTime}
+                        title="Önceki analiz sonuçları gönderilmez, sıfırdan analiz yapılır"
+                      >
+                        <span className="icon">{isReanalyzing ? 'hourglass_empty' : 'restart_alt'}</span>
+                        {isReanalyzing ? 'Analiz Ediliyor...' : 'Sıfırdan Analiz'}
                       </button>
                       <button
                         className="button secondary small"
@@ -1728,6 +1980,16 @@ ${basePrompt}
           <div className="loading-content">
             <div className="spinner"></div>
             <p>{isLoadingVideo ? 'Video işleniyor...' : analysisProgress || (isReanalyzing ? 'Yeniden analiz yapılıyor...' : 'Analiz yapılıyor...')}</p>
+            {(isLoading || isReanalyzing) && !isLoadingVideo && (
+              <button
+                className="button secondary"
+                style={{ marginTop: '12px' }}
+                onClick={() => { cancelAnalysisRef.current = true; }}
+              >
+                <span className="icon">stop_circle</span>
+                Durdur
+              </button>
+            )}
           </div>
         </div>
       )}

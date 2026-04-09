@@ -2,19 +2,7 @@
  * API Configuration Component
  */
 import React, { useState, useEffect } from 'react';
-
-// Basit cookie yardımcıları
-function setCookie(name: string, value: string, days = 365) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
-}
-function getCookie(name: string) {
-  return document.cookie.split('; ').reduce((r, v) => {
-    const parts = v.split('=');
-    return parts[0] === name ? decodeURIComponent(parts[1]) : r;
-  }, '');
-}
-import { APIProvider, APIConfig, getCurrentConfig, updateAPIConfig, testOllamaConnection, getOllamaModels, getGeminiModels } from './api';
+import { APIProvider, APIConfig, getCurrentConfig, updateAPIConfig, testOllamaConnection, getOllamaModels, getGeminiModels, testOpenAIConnection, getOpenAIModels } from './api';
 
 interface APISettingsProps {
   isOpen: boolean;
@@ -30,21 +18,13 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [geminiModels, setGeminiModels] = useState<{id: string, displayName: string}[]>([]);
   const [isLoadingGeminiModels, setIsLoadingGeminiModels] = useState(false);
+  const [openaiModels, setOpenaiModels] = useState<string[]>([]);
+  const [isLoadingOpenaiModels, setIsLoadingOpenaiModels] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-        // Cookie'den ayarları yükle
-        const cookieValue = getCookie('api_config');
-        if (cookieValue) {
-          try {
-            const parsed = JSON.parse(cookieValue);
-            setConfig(parsed);
-          } catch {
-            setConfig(getCurrentConfig());
-          }
-        } else {
-          setConfig(getCurrentConfig());
-        }
+        // localStorage'dan ayarları yükle (getCurrentConfig zaten localStorage'dan okur)
+        setConfig(getCurrentConfig());
     }
   }, [isOpen]);
 
@@ -89,6 +69,14 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
     setConfig(newConfig);
   };
 
+  const handleOpenAIConfigChange = (field: 'baseURL' | 'apiKey' | 'model', value: string) => {
+    const newConfig = {
+      ...config,
+      openai: { ...config.openai, baseURL: config.openai?.baseURL || 'http://localhost:8080', apiKey: config.openai?.apiKey || '', model: config.openai?.model || 'gpt-4o', [field]: value }
+    };
+    setConfig(newConfig);
+  };
+
   const testConnection = async () => {
     if (config.provider === APIProvider.OLLAMA && config.ollama) {
       setIsTestingConnection(true);
@@ -111,13 +99,32 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
       } finally {
         setIsTestingConnection(false);
       }
+    } else if (config.provider === APIProvider.OPENAI && config.openai) {
+      setIsTestingConnection(true);
+      setConnectionStatus('');
+
+      try {
+        const isConnected = await testOpenAIConnection(config.openai);
+        if (isConnected) {
+          setConnectionStatus('✅ OpenAI API bağlantısı başarılı!');
+          setIsLoadingOpenaiModels(true);
+          const models = await getOpenAIModels(config.openai);
+          setOpenaiModels(models);
+          setIsLoadingOpenaiModels(false);
+        } else {
+          setConnectionStatus('❌ API bağlantısı başarısız. Sunucu adresini ve API anahtarını kontrol edin.');
+        }
+      } catch (error) {
+        setConnectionStatus(`❌ Bağlantı hatası: ${error}`);
+      } finally {
+        setIsTestingConnection(false);
+      }
     }
   };
 
   const handleSave = () => {
+     // updateAPIConfig artık otomatik olarak localStorage'a kaydediyor
      updateAPIConfig(config);
-     // Cookie'ye yaz
-     setCookie('api_config', JSON.stringify(config));
      onConfigChange(config);
      onClose();
   };
@@ -169,6 +176,20 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
               <div className="radio-label">
                 <strong>Ollama (Yerel)</strong>
                 <p>Yerel çalışan görsel AI modelleri (llava, moondream)</p>
+              </div>
+            </div>
+            <div className="radio-option">
+              <input
+                type="radio"
+                name="provider"
+                value={APIProvider.OPENAI}
+                checked={config.provider === APIProvider.OPENAI}
+                onChange={() => handleProviderChange(APIProvider.OPENAI)}
+                className="mr-3"
+              />
+              <div className="radio-label">
+                <strong>OpenAI Uyumlu API</strong>
+                <p>LocalAI, LM Studio, OpenAI veya herhangi bir OpenAI-uyumlu endpoint</p>
               </div>
             </div>
           </div>
@@ -288,6 +309,98 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
                 <p>• Ollama sunucusunun çalıştığından emin olun</p>
                 <p>• Video analizi için <code>llava</code>, <code>moondream</code> gibi görsel modeller önerilir</p>
                 <p>• Model yüklemek için: <code>ollama pull llava:latest</code></p>
+                <br />
+                <p><span className="status-warning">⚠️</span> Video'dan otomatik frame çıkarımı yapılır</p>
+                <p><span className="status-success">ℹ️</span> Tam video analizi için Gemini API önerilir</p>
+              </div>
+            </div>
+          )}
+
+          {config.provider === APIProvider.OPENAI && (
+            <div className="form-group">
+              <div>
+                <label className="form-label">
+                  API Sunucu Adresi (Base URL)
+                </label>
+                <input
+                  type="text"
+                  value={config.openai?.baseURL || ''}
+                  onChange={(e) => handleOpenAIConfigChange('baseURL', e.target.value)}
+                  placeholder="http://localhost:8080"
+                />
+                <p className="form-help">
+                  <span className="icon">info</span>
+                  /v1/chat/completions endpoint'i otomatik eklenir
+                </p>
+              </div>
+
+              <div>
+                <label className="form-label">
+                  API Anahtarı (isteğe bağlı)
+                </label>
+                <input
+                  type="password"
+                  value={config.openai?.apiKey || ''}
+                  onChange={(e) => handleOpenAIConfigChange('apiKey', e.target.value)}
+                  placeholder="sk-... veya boş bırakın"
+                />
+                <p className="form-help">LocalAI için genellikle gerekli değildir. OpenAI için zorunludur.</p>
+              </div>
+
+              <div>
+                <label className="form-label">
+                  Model
+                </label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <input
+                    type="text"
+                    value={config.openai?.model || ''}
+                    onChange={(e) => handleOpenAIConfigChange('model', e.target.value)}
+                    placeholder="gpt-4o"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    onClick={testConnection}
+                    disabled={isTestingConnection}
+                    className="button secondary"
+                    style={{ minHeight: 'auto', padding: '12px 20px' }}
+                  >
+                    <span className="icon">wifi</span>
+                    {isTestingConnection ? 'Test Ediliyor...' : 'Bağlantıyı Test Et'}
+                  </button>
+                </div>
+                {connectionStatus && (
+                  <p className="form-help status-indicator" style={{ marginTop: '8px' }}>
+                    {connectionStatus}
+                  </p>
+                )}
+              </div>
+
+              {openaiModels.length > 0 && (
+                <div>
+                  <label className="form-label">
+                    Mevcut Modeller
+                  </label>
+                  <select
+                    value={config.openai?.model || ''}
+                    onChange={(e) => handleOpenAIConfigChange('model', e.target.value)}
+                    disabled={isLoadingOpenaiModels}
+                  >
+                    <option value="">Model seçin...</option>
+                    {openaiModels.map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                  <p className="form-help">Sunucudan otomatik olarak alınan model listesi</p>
+                </div>
+              )}
+
+              <div className="form-help" style={{ fontSize: '0.85rem', lineHeight: '1.6' }}>
+                <p><strong>📋 Kullanım Talimatları:</strong></p>
+                <p>• <strong>LocalAI:</strong> <code>http://localhost:8080</code> — API anahtarı gerekmez</p>
+                <p>• <strong>LM Studio:</strong> <code>http://localhost:1234</code> — API anahtarı gerekmez</p>
+                <p>• <strong>OpenAI:</strong> <code>https://api.openai.com</code> — API anahtarı zorunlu</p>
+                <p>• Vision destekli model gereklidir (gpt-4o, llava vb.)</p>
                 <br />
                 <p><span className="status-warning">⚠️</span> Video'dan otomatik frame çıkarımı yapılır</p>
                 <p><span className="status-success">ℹ️</span> Tam video analizi için Gemini API önerilir</p>

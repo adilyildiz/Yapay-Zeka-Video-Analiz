@@ -1490,6 +1490,13 @@ video {
 .mode-header {
   text-align: center;
 }
+.mode-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .mode-header h1 {
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
@@ -1553,8 +1560,45 @@ video {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  align-items: center;
   width: 100%;
 }
+
+/* Model Badge Button */
+.model-badge-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px !important;
+  min-height: 36px !important;
+  background: rgba(var(--primary-rgb, 99, 102, 241), 0.1) !important;
+  border: 1px solid rgba(var(--primary-rgb, 99, 102, 241), 0.25) !important;
+  border-radius: 20px !important;
+  color: var(--primary) !important;
+  font-size: 13px !important;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+.model-badge-btn:hover {
+  background: rgba(var(--primary-rgb, 99, 102, 241), 0.2) !important;
+  border-color: var(--primary) !important;
+}
+.model-badge-btn .icon {
+  font-size: 16px;
+}
+.model-badge-btn .icon:last-child {
+  font-size: 14px;
+  opacity: 0.5;
+}
+.model-badge-btn .model-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .navigation-buttons.bottom {
   border-top: 1px solid var(--border);
   padding-top: 1.5rem;
@@ -3279,6 +3323,51 @@ video {
 .time-input-group small {
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.8rem;
+}
+
+.reanalysis-chunk-duration {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.reanalysis-chunk-duration label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.chunk-buttons-inline {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.chunk-btn-sm {
+  padding: 4px 10px !important;
+  min-height: 30px !important;
+  font-size: 12px !important;
+  font-weight: 500;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: none !important;
+}
+.chunk-btn-sm:hover:not(:disabled) {
+  background: rgba(var(--primary-rgb, 99,102,241), 0.1) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+.chunk-btn-sm.active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: white !important;
+}
+.chunk-btn-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .reanalysis-actions {

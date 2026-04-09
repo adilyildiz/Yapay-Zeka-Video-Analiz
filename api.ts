@@ -11,19 +11,29 @@ import {
   FunctionCallingConfigMode,
 } from '@google/genai';
 import OllamaAPI, { OllamaConfig, OllamaUploadedFile } from './ollama-api';
+import OpenAIAPI, { OpenAIConfig, OpenAIUploadedFile } from './openai-api';
 
-// Cookie yardımcı fonksiyonları
-function getCookie(name: string): string {
-  if (typeof document === 'undefined') return '';
-  return document.cookie.split('; ').reduce((r, v) => {
-    const parts = v.split('=');
-    return parts[0] === name ? decodeURIComponent(parts[1]) : r;
-  }, '');
+// localStorage yardımcı fonksiyonları
+function getStoredConfig(): string {
+  try {
+    return localStorage.getItem('api_config') || '';
+  } catch {
+    return '';
+  }
+}
+
+function setStoredConfig(value: string): void {
+  try {
+    localStorage.setItem('api_config', value);
+  } catch (e) {
+    console.warn('localStorage\'a API config yazılamadı:', e);
+  }
 }
 
 export enum APIProvider {
   GEMINI = 'gemini',
-  OLLAMA = 'ollama'
+  OLLAMA = 'ollama',
+  OPENAI = 'openai'
 }
 
 export interface APIConfig {
@@ -33,6 +43,7 @@ export interface APIConfig {
     model: string;
   };
   ollama?: OllamaConfig;
+  openai?: OpenAIConfig;
 }
 
 // API configuration - bu normalde bir config dosyasından gelecek
@@ -45,17 +56,28 @@ let currentConfig: APIConfig = {
   ollama: {
     baseURL: 'http://localhost:11434',
     model: 'llava:latest'
+  },
+  openai: {
+    baseURL: 'http://localhost:8080',
+    apiKey: '',
+    model: 'gpt-4o'
   }
 };
 
 let geminiClient = new GoogleGenAI({apiKey: currentConfig.gemini?.apiKey || ''});
 let ollamaClient: OllamaAPI | null = null;
+let openaiClient: OpenAIAPI | null = null;
 
-export type UploadedFile = GeminiFile | OllamaUploadedFile;
+export type UploadedFile = GeminiFile | OllamaUploadedFile | OpenAIUploadedFile;
 
 // API konfigürasyonunu güncelleme fonksiyonu
-export function updateAPIConfig(config: APIConfig) {
+export function updateAPIConfig(config: APIConfig, persist = true) {
   currentConfig = config;
+  
+  // localStorage'a kaydet
+  if (persist) {
+    setStoredConfig(JSON.stringify(config));
+  }
   
   // Gemini client'ı güncelle
   if (config.gemini?.apiKey) {
@@ -68,24 +90,29 @@ export function updateAPIConfig(config: APIConfig) {
       ollamaClient['config'].model !== config.ollama.model)) {
     ollamaClient = new OllamaAPI(config.ollama);
   }
+
+  // OpenAI client'ı güncelle
+  if (config.openai && (!openaiClient ||
+      openaiClient['config'].baseURL !== config.openai.baseURL ||
+      openaiClient['config'].model !== config.openai.model ||
+      openaiClient['config'].apiKey !== config.openai.apiKey)) {
+    openaiClient = new OpenAIAPI(config.openai);
+  }
 }
 
 export function getCurrentConfig(): APIConfig {
-  // Cookie'den config'i yükle
-  const cookieValue = getCookie('api_config');
-  console.log('API Config cookie değeri:', cookieValue);
-  if (cookieValue) {
+  // localStorage'dan config'i yükle
+  const storedValue = getStoredConfig();
+  if (storedValue) {
     try {
-      const cookieConfig = JSON.parse(cookieValue) as APIConfig;
-      console.log('Cookie\'den okunan config:', cookieConfig);
-      // Cookie'deki config ile currentConfig'i güncelle
-      updateAPIConfig(cookieConfig);
-      return cookieConfig;
+      const storedConfig = JSON.parse(storedValue) as APIConfig;
+      // localStorage'daki config ile currentConfig'i güncelle (persist=false, tekrar yazmaya gerek yok)
+      updateAPIConfig(storedConfig, false);
+      return storedConfig;
     } catch (error) {
-      console.warn('Cookie\'den API config okunamadı:', error);
+      console.warn('localStorage\'dan API config okunamadı:', error);
     }
   }
-  console.log('Cookie bulunamadı, varsayılan config döndürülüyor:', currentConfig);
   return currentConfig;
 }
 
@@ -106,7 +133,21 @@ async function generateContent(
       ollamaClient = new OllamaAPI(currentConfig.ollama);
     }
     
-    return await ollamaClient.generateContent(text, functionDeclarations, file as OllamaUploadedFile);
+    // Multi-frame modu (extraImages varsa) ise video-specific generate kullan
+    const ollamaFile = file as OllamaUploadedFile;
+    if (ollamaFile.extraImages && ollamaFile.extraImages.length > 0) {
+      return await ollamaClient.generateContentWithVideo(text, functionDeclarations, ollamaFile);
+    }
+    return await ollamaClient.generateContent(text, functionDeclarations, ollamaFile);
+  } else if (currentConfig.provider === APIProvider.OPENAI) {
+    if (!openaiClient) {
+      if (!currentConfig.openai) {
+        throw new Error('OpenAI configuration not found');
+      }
+      openaiClient = new OpenAIAPI(currentConfig.openai);
+    }
+
+    return await openaiClient.generateContent(text, functionDeclarations, file as OpenAIUploadedFile);
   } else {
     // Gemini API
     if (!currentConfig.gemini?.apiKey) {
@@ -166,6 +207,18 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
     console.log('Processing file for Ollama...');
     const uploadedFile = await ollamaClient.uploadFile(file);
     console.log('File processed for Ollama.');
+    return uploadedFile;
+  } else if (currentConfig.provider === APIProvider.OPENAI) {
+    if (!openaiClient) {
+      if (!currentConfig.openai) {
+        throw new Error('OpenAI configuration not found');
+      }
+      openaiClient = new OpenAIAPI(currentConfig.openai);
+    }
+
+    console.log('Processing file for OpenAI...');
+    const uploadedFile = await openaiClient.uploadFile(file);
+    console.log('File processed for OpenAI.');
     return uploadedFile;
   } else {
     // Gemini API
@@ -264,6 +317,68 @@ export async function extractOllamaFrameAtTime(file: globalThis.File, timeInSeco
   }
   
   return await ollamaClient.extractFrameAtTime(file, timeInSeconds);
+}
+
+// Ollama için video segmenti hazırlama (kesilmiş video parçası gönderimi)
+export async function prepareOllamaVideoSegment(file: globalThis.File): Promise<OllamaUploadedFile> {
+  if (!ollamaClient) {
+    if (!currentConfig.ollama) {
+      throw new Error('Ollama configuration not found');
+    }
+    ollamaClient = new OllamaAPI(currentConfig.ollama);
+  }
+  
+  return await ollamaClient.prepareVideoSegment(file);
+}
+
+// Ollama video segment ile analiz
+export async function generateOllamaContentWithVideo(
+  text: string,
+  functionDeclarations: any[],
+  file: OllamaUploadedFile,
+) {
+  if (!ollamaClient) {
+    if (!currentConfig.ollama) {
+      throw new Error('Ollama configuration not found');
+    }
+    ollamaClient = new OllamaAPI(currentConfig.ollama);
+  }
+  
+  return await ollamaClient.generateContentWithVideo(text, functionDeclarations, file);
+}
+
+// OpenAI bağlantısını test etme fonksiyonu
+export async function testOpenAIConnection(config: OpenAIConfig): Promise<boolean> {
+  const testClient = new OpenAIAPI(config);
+  return await testClient.checkConnection();
+}
+
+// OpenAI modellerini alma fonksiyonu
+export async function getOpenAIModels(config: OpenAIConfig): Promise<string[]> {
+  const testClient = new OpenAIAPI(config);
+  return await testClient.getAvailableModels();
+}
+
+// OpenAI için chunk-specific frame extraction
+export async function extractOpenAIFrameAtTime(file: globalThis.File, timeInSeconds: number): Promise<OpenAIUploadedFile> {
+  if (!openaiClient) {
+    if (!currentConfig.openai) {
+      throw new Error('OpenAI configuration not found');
+    }
+    openaiClient = new OpenAIAPI(currentConfig.openai);
+  }
+  return await openaiClient.extractFrameAtTime(file, timeInSeconds);
+}
+
+// OpenAI için çoklu kare hazırlama
+export async function prepareOpenAIVideoSegment(file: globalThis.File): Promise<OpenAIUploadedFile> {
+  if (!openaiClient) {
+    if (!currentConfig.openai) {
+      throw new Error('OpenAI configuration not found');
+    }
+    openaiClient = new OpenAIAPI(currentConfig.openai);
+  }
+  return await openaiClient.prepareVideoSegment(file);
 }
 
 export {generateContent, uploadFile};
