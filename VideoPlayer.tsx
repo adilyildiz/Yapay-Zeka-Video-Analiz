@@ -65,7 +65,7 @@ export default function VideoPlayer({
   const [scrubberTime, setScrubberTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
-  const [currentCaption, setCurrentCaption] = useState<string | undefined>();
+  const [currentCaptions, setCurrentCaptions] = useState<string[]>([]);
   const [seekSliderValue, setSeekSliderValue] = useState(0);
   const currentSecs = duration * scrubberTime || 0;
   const currentPercent = scrubberTime * 100;
@@ -172,11 +172,22 @@ export default function VideoPlayer({
     }
 
     if (timecodeListReversed) {
-      setCurrentCaption(
-        timecodeListReversed.find(
-          (t) => timeToSecs(t.time) <= video.currentTime,
-        )?.text,
-      );
+      const activeTexts: string[] = [];
+      
+      for (const t of timecodeListReversed) {
+        const start = timeToSecs(t.startTime || t.time);
+        if (start <= video.currentTime) {
+          const specifiedEndSecs = t.endTime ? timeToSecs(t.endTime) : start;
+          const effectiveEnd = Math.max(specifiedEndSecs, start + 1);
+          
+          if (video.currentTime <= effectiveEnd) {
+            if (t.text) {
+              activeTexts.unshift(t.text);
+            }
+          }
+        }
+      }
+      setCurrentCaptions(activeTexts);
     }
   };
 
@@ -236,8 +247,12 @@ export default function VideoPlayer({
               onPause={onPause}
             />
 
-            {currentCaption && (
-              <div className="videoCaption">{currentCaption}</div>
+            {currentCaptions.length > 0 && (
+              <div className="videoCaptionsContainer">
+                {currentCaptions.map((caption, i) => (
+                  <div key={i} className="videoCaption">{caption}</div>
+                ))}
+              </div>
             )}
           </div>
 

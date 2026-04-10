@@ -290,8 +290,11 @@ main {
     border-radius: 8px;
   }
   
-  .videoCaption {
+  .videoCaptionsContainer {
     bottom: 100px;
+  }
+  
+  .videoCaption {
     font-size: 14px;
     padding: 8px 12px;
     max-width: 90%;
@@ -613,8 +616,11 @@ main {
     max-height: 50vh;
   }
   
-  .videoCaption {
+  .videoCaptionsContainer {
     bottom: 80px;
+  }
+  
+  .videoCaption {
     font-size: 12px;
     padding: 6px 10px;
   }
@@ -871,23 +877,34 @@ video {
   text-align: center;
 }
 
+.videoCaptionsContainer {
+  position: absolute;
+  bottom: 250px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+  pointer-events: none;
+  z-index: 50;
+}
+
 .videoCaption {
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(10px);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-  position: absolute;
-  bottom: 250px;
   text-align: center;
   padding: 10px;
   color: #fff;
   max-width: 90%;
   font-size: 15px;
   margin-inline: auto;
-  left: 50%;
-  translate: -50% 0;
   width: fit-content;
   border-radius: 5px;
   transition: opacity 0.2s;
+  pointer-events: auto;
 }
 
 .videoControls {

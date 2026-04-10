@@ -127,6 +127,7 @@ export default function App() {
   const [showModeSelection, setShowModeSelection] = useState(true);
   const [deleteRangeStart, setDeleteRangeStart] = useState<string>('');
   const [deleteRangeEnd, setDeleteRangeEnd] = useState<string>('');
+  const [analyzedChunks, setAnalyzedChunks] = useState<{start: number, end: number}[]>([]);
   const [ollamaSendMode, setOllamaSendMode] = useState<'frame' | 'video'>(savedPreferences?.ollamaSendMode || 'frame');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -476,6 +477,16 @@ export default function App() {
       CHUNK_DURATION_SECONDS = chunkDuration;
       numChunks = Math.ceil(analysisLength / CHUNK_DURATION_SECONDS);
     }
+    
+    const currentChunks: {start: number, end: number}[] = [];
+    for (let i = 0; i < numChunks; i++) {
+        currentChunks.push({
+            start: rangeStartSecs + i * CHUNK_DURATION_SECONDS,
+            end: Math.min(rangeStartSecs + (i + 1) * CHUNK_DURATION_SECONDS, rangeEndSecs)
+        });
+    }
+    setAnalyzedChunks(currentChunks);
+
     let allTimecodes: any[] = [];
     let overallError: string | null = null;
     let overallWarning: string | null = null;
@@ -1272,6 +1283,7 @@ ${basePrompt}
     setAnalysisRangeEnd('');
     setDeleteRangeStart('');
     setDeleteRangeEnd('');
+    setAnalyzedChunks([]);
 
     // Mod ayarlarını localStorage'dan geri yükle (sıfırlama yerine)
     setSelectedMode(saved?.selectedMode || 'Detaylı Transkript');
@@ -1737,6 +1749,26 @@ ${basePrompt}
                         </button>
                       </div>
                     </div>
+                    {analyzedChunks && analyzedChunks.length > 0 && (
+                      <div className="reanalysis-chunk-duration">
+                        <label style={{marginTop: '12px', display: 'block'}}>Analiz Parçaları (Hızlı Seçim)</label>
+                        <div className="chunk-buttons-inline" style={{marginTop: '8px'}}>
+                          {analyzedChunks.map((chunk, idx) => (
+                            <button
+                              key={idx}
+                              className="chunk-btn-sm"
+                              onClick={() => {
+                                setReanalysisStartTime(formatSecondsToHHMMSS(chunk.start));
+                                setReanalysisEndTime(formatSecondsToHHMMSS(chunk.end));
+                              }}
+                              disabled={isReanalyzing}
+                            >
+                              {formatSecondsToHHMMSS(chunk.start)} - {formatSecondsToHHMMSS(chunk.end)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="reanalysis-actions">
                       <button
                         className="button"
@@ -1814,6 +1846,25 @@ ${basePrompt}
                         <small>Format: SS:DD:SS veya DD:SS veya SS</small>
                       </div>
                     </div>
+                    {analyzedChunks && analyzedChunks.length > 0 && (
+                      <div className="reanalysis-chunk-duration">
+                        <label style={{marginTop: '12px', display: 'block'}}>Analiz Parçaları (Hızlı Seçim)</label>
+                        <div className="chunk-buttons-inline" style={{marginTop: '8px'}}>
+                          {analyzedChunks.map((chunk, idx) => (
+                            <button
+                              key={idx}
+                              className="chunk-btn-sm"
+                              onClick={() => {
+                                setDeleteRangeStart(formatSecondsToHHMMSS(chunk.start));
+                                setDeleteRangeEnd(formatSecondsToHHMMSS(chunk.end));
+                              }}
+                            >
+                              {formatSecondsToHHMMSS(chunk.start)} - {formatSecondsToHHMMSS(chunk.end)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="reanalysis-actions">
                       <button
                         className="button danger"
