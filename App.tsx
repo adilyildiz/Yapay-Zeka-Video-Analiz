@@ -29,7 +29,84 @@ import modes from './modes';
 import {generateSrt, timeToSecs} from './utils';
 import VideoPlayer from './VideoPlayer.jsx';
 
-// Mode ayarlarını kaydet (localStorage)
+// SRT dosyasını parse eden fonksiyon
+function parseSrtFile(content: string): any[] {
+  const blocks = content.trim().split(/\n\s*\n/);
+  const timecodes: any[] = [];
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 3) continue;
+
+    // Satır 0: index, Satır 1: zaman aralığı, Satır 2+: metin
+    const timeLine = lines[1];
+    const timeMatch = timeLine.match(/(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})/);
+    if (!timeMatch) continue;
+
+    const startTime = timeMatch[1].replace(',', ':').substring(0, 8); // SS:DD:SS
+    const endTime = timeMatch[2].replace(',', ':').substring(0, 8);
+    const text = lines.slice(2).join(' ').trim();
+
+    // Kategori parse: [Kategori]: Açıklama
+    const categoryMatch = text.match(/^\[(.*?)\]\s*:?\s*(.*)/);
+    if (categoryMatch) {
+      timecodes.push({
+        time: startTime,
+        startTime,
+        endTime,
+        text,
+        category: categoryMatch[1],
+        description: categoryMatch[2],
+      });
+    } else {
+      timecodes.push({
+        time: startTime,
+        startTime,
+        endTime,
+        text,
+      });
+    }
+  }
+
+  return timecodes;
+}
+
+// XLSX dosyasını parse eden fonksiyon
+function parseXlsxFile(data: ArrayBuffer): any[] {
+  const wb = XLSX.read(data, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+  if (rows.length < 2) return [];
+
+  // İlk satır header: Başlangıç, Bitiş, Kategori, Açıklama, Konum
+  const timecodes: any[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row[0]) continue;
+
+    const startTime = String(row[0] || '').trim();
+    const endTime = String(row[1] || '').trim();
+    const category = String(row[2] || '').trim();
+    const description = String(row[3] || '').trim();
+    const location = String(row[4] || '').trim();
+
+    const categoryDisplay = category ? `[${category}]: ` : '';
+    const text = `${categoryDisplay}${description}`;
+
+    timecodes.push({
+      time: startTime,
+      startTime,
+      endTime: endTime || startTime,
+      text,
+      category: category || undefined,
+      description,
+      location: location || undefined,
+    });
+  }
+
+  return timecodes;
+}
 function saveModePreferences(
   mode: string, customPrompt: string, chartMode: string, chartPrompt: string,
   categoricalMode: string, categoricalPrompt: string,
@@ -129,8 +206,10 @@ export default function App() {
   const [deleteRangeEnd, setDeleteRangeEnd] = useState<string>('');
   const [analyzedChunks, setAnalyzedChunks] = useState<{start: number, end: number}[]>([]);
   const [ollamaSendMode, setOllamaSendMode] = useState<'frame' | 'video'>(savedPreferences?.ollamaSendMode || 'frame');
+  const [importedTranscriptName, setImportedTranscriptName] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const transcriptInputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<globalThis.File | null>(null);
   // FIX: Changed HTMLElement to HTMLDivElement to match the element type it's referencing.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -402,6 +481,59 @@ export default function App() {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       uploadVideo(selectedFile);
+    }
+  };
+
+  const importTranscriptFile = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    setImportedTranscriptName(file.name);
+
+    try {
+      let parsed: any[] = [];
+
+      if (ext === 'srt') {
+        const text = await file.text();
+        parsed = parseSrtFile(text);
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const buffer = await file.arrayBuffer();
+        parsed = parseXlsxFile(buffer);
+      } else {
+        setAnalysisError('Desteklenmeyen dosya formatı. Lütfen .srt veya .xlsx dosyası seçin.');
+        return;
+      }
+
+      if (parsed.length === 0) {
+        setAnalysisError('Dosyadan veri okunamadı. Dosya formatını kontrol edin.');
+        return;
+      }
+
+      setTimecodeList(parsed);
+      setAnalysisWarning(`📄 "${file.name}" dosyasından ${parsed.length} satır veri yüklendi. Aralık seçerek yeniden analiz yapabilirsiniz.`);
+      setAnalysisError(null);
+
+      // Eğer henüz results ekranında değilsek, oraya geç
+      if (step === 'mode') {
+        setActiveMode(selectedMode);
+        setStep('results');
+      }
+    } catch (err) {
+      setAnalysisError(`Dosya okunurken hata oluştu: ${err}`);
+    }
+  };
+
+  const handleTranscriptImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+    await importTranscriptFile(selectedFile);
+    // Input'u sıfırla (aynı dosyayı tekrar seçebilmek için)
+    e.target.value = '';
+  };
+
+  const handleTranscriptDrop = (e: React.DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      importTranscriptFile(droppedFile);
     }
   };
   
@@ -1284,6 +1416,7 @@ ${basePrompt}
     setDeleteRangeStart('');
     setDeleteRangeEnd('');
     setAnalyzedChunks([]);
+    setImportedTranscriptName('');
 
     // Mod ayarlarını localStorage'dan geri yükle (sıfırlama yerine)
     setSelectedMode(saved?.selectedMode || 'Detaylı Transkript');
@@ -1630,6 +1763,38 @@ ${basePrompt}
               </div>
             )}
           </div>
+
+          {/* Önceki Analiz Dosyası İçe Aktarma */}
+          <div className="chunk-duration-section">
+            <div className="setting-group">
+              <label className="setting-label">
+                <span className="icon">upload_file</span>
+                Önceki Analiz Dosyasını Yükle (isteğe bağlı)
+              </label>
+              <p className="setting-description">
+                Daha önce dışa aktardığınız SRT veya Excel (.xlsx) dosyasını yükleyerek mevcut analiz verileriyle devam edebilir,
+                belirli aralıkları yeniden analiz ettirebilirsiniz.
+              </p>
+              <div
+                className="upload-area compact"
+                onClick={() => transcriptInputRef.current?.click()}
+                onDrop={handleTranscriptDrop}
+                onDragOver={(e) => e.preventDefault()}
+                style={{ cursor: 'pointer', padding: '16px', minHeight: 'auto' }}
+              >
+                <div className="upload-content" style={{ gap: '8px' }}>
+                  <span className="icon-large" style={{ fontSize: '2rem' }}>description</span>
+                  {importedTranscriptName ? (
+                    <p style={{ margin: 0 }}>
+                      <strong>✅ {importedTranscriptName}</strong> yüklendi
+                    </p>
+                  ) : (
+                    <p style={{ margin: 0 }}>SRT veya XLSX dosyasını sürükleyip bırakın veya tıklayarak seçin</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="navigation-buttons bottom">
           <button className="button secondary" onClick={handleReset}>
@@ -1906,6 +2071,10 @@ ${basePrompt}
                         <span className="icon">table_view</span>
                         Excel İndir
                       </button>
+                      <button onClick={() => transcriptInputRef.current?.click()} className="button small secondary">
+                        <span className="icon">upload_file</span>
+                        Dosya İçe Aktar
+                      </button>
                     </div>
                     <span className="icon">expand_more</span>
                   </summary>
@@ -2055,6 +2224,13 @@ ${basePrompt}
         isOpen={isAPISettingsOpen}
         onClose={() => setIsAPISettingsOpen(false)}
         onConfigChange={handleAPIConfigChange}
+      />
+      <input
+        type="file"
+        ref={transcriptInputRef}
+        onChange={handleTranscriptImport}
+        accept=".srt,.xlsx,.xls"
+        style={{ display: 'none' }}
       />
     </main>
   );

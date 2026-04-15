@@ -36,6 +36,48 @@ export enum APIProvider {
   OPENAI = 'openai'
 }
 
+// Çoklu Gemini API anahtarı yönetimi
+export interface SavedGeminiKey {
+  label: string;
+  apiKey: string;
+}
+
+const GEMINI_KEYS_STORAGE_KEY = 'gemini_api_keys';
+
+export function getSavedGeminiKeys(): SavedGeminiKey[] {
+  try {
+    const stored = localStorage.getItem(GEMINI_KEYS_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored) as SavedGeminiKey[];
+    }
+  } catch (e) {
+    console.warn('Gemini API anahtarları okunamadı:', e);
+  }
+  return [];
+}
+
+export function saveGeminiKeys(keys: SavedGeminiKey[]): void {
+  try {
+    localStorage.setItem(GEMINI_KEYS_STORAGE_KEY, JSON.stringify(keys));
+  } catch (e) {
+    console.warn('Gemini API anahtarları kaydedilemedi:', e);
+  }
+}
+
+export function addGeminiKey(label: string, apiKey: string): SavedGeminiKey[] {
+  const keys = getSavedGeminiKeys();
+  keys.push({ label, apiKey });
+  saveGeminiKeys(keys);
+  return keys;
+}
+
+export function removeGeminiKey(index: number): SavedGeminiKey[] {
+  const keys = getSavedGeminiKeys();
+  keys.splice(index, 1);
+  saveGeminiKeys(keys);
+  return keys;
+}
+
 export interface APIConfig {
   provider: APIProvider;
   gemini?: {

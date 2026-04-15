@@ -2,7 +2,7 @@
  * API Configuration Component
  */
 import React, { useState, useEffect } from 'react';
-import { APIProvider, APIConfig, getCurrentConfig, updateAPIConfig, testOllamaConnection, getOllamaModels, getGeminiModels, testOpenAIConnection, getOpenAIModels } from './api';
+import { APIProvider, APIConfig, getCurrentConfig, updateAPIConfig, testOllamaConnection, getOllamaModels, getGeminiModels, testOpenAIConnection, getOpenAIModels, SavedGeminiKey, getSavedGeminiKeys, addGeminiKey, removeGeminiKey } from './api';
 
 interface APISettingsProps {
   isOpen: boolean;
@@ -20,11 +20,16 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
   const [isLoadingGeminiModels, setIsLoadingGeminiModels] = useState(false);
   const [openaiModels, setOpenaiModels] = useState<string[]>([]);
   const [isLoadingOpenaiModels, setIsLoadingOpenaiModels] = useState(false);
+  const [savedKeys, setSavedKeys] = useState<SavedGeminiKey[]>(getSavedGeminiKeys());
+  const [newKeyLabel, setNewKeyLabel] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [showNewKeyForm, setShowNewKeyForm] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
         // localStorage'dan ayarları yükle (getCurrentConfig zaten localStorage'dan okur)
         setConfig(getCurrentConfig());
+        setSavedKeys(getSavedGeminiKeys());
     }
   }, [isOpen]);
 
@@ -198,17 +203,106 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
           {config.provider === APIProvider.GEMINI && (
             <div className="form-group">
               <label className="form-label">
-                Gemini API Anahtarı
+                Gemini API Anahtarları
               </label>
-              <input
-                type="password"
-                value={config.gemini?.apiKey || ''}
-                onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
-                placeholder="API anahtarınızı buraya girin"
-              />
+
+              {/* Kayıtlı anahtarlar listesi */}
+              {savedKeys.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                  {savedKeys.map((key, index) => (
+                    <div key={index} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '8px 12px', borderRadius: '8px',
+                      background: config.gemini?.apiKey === key.apiKey ? 'var(--accent-color, #4285f4)' : 'var(--bg-secondary, #2a2a2a)',
+                      color: config.gemini?.apiKey === key.apiKey ? '#fff' : 'inherit',
+                      cursor: 'pointer',
+                      border: config.gemini?.apiKey === key.apiKey ? '2px solid var(--accent-color, #4285f4)' : '2px solid transparent',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={() => handleGeminiApiKeyChange(key.apiKey)}
+                    >
+                      <span style={{ flex: 1, fontWeight: 500 }}>{key.label}</span>
+                      <span style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                        {key.apiKey.substring(0, 8)}...{key.apiKey.slice(-4)}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const updated = removeGeminiKey(index);
+                          setSavedKeys(updated);
+                          if (config.gemini?.apiKey === key.apiKey && updated.length > 0) {
+                            handleGeminiApiKeyChange(updated[0].apiKey);
+                          }
+                        }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: config.gemini?.apiKey === key.apiKey ? '#fff' : 'var(--text-secondary, #888)',
+                          fontSize: '1.1em', padding: '2px 6px', borderRadius: '4px'
+                        }}
+                        title="Anahtarı sil"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Yeni anahtar ekleme formu */}
+              {showNewKeyForm ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px', padding: '12px', borderRadius: '8px', background: 'var(--bg-secondary, #2a2a2a)' }}>
+                  <input
+                    type="text"
+                    value={newKeyLabel}
+                    onChange={(e) => setNewKeyLabel(e.target.value)}
+                    placeholder="Anahtar adı (ör: Kişisel, İş, Proje)"
+                    style={{ width: '100%' }}
+                  />
+                  <input
+                    type="password"
+                    value={newKeyValue}
+                    onChange={(e) => setNewKeyValue(e.target.value)}
+                    placeholder="API anahtarını buraya girin"
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      className="button secondary"
+                      style={{ minHeight: 'auto', padding: '8px 16px' }}
+                      onClick={() => { setShowNewKeyForm(false); setNewKeyLabel(''); setNewKeyValue(''); }}
+                    >
+                      İptal
+                    </button>
+                    <button
+                      className="button"
+                      style={{ minHeight: 'auto', padding: '8px 16px' }}
+                      disabled={!newKeyLabel.trim() || !newKeyValue.trim()}
+                      onClick={() => {
+                        const updated = addGeminiKey(newKeyLabel.trim(), newKeyValue.trim());
+                        setSavedKeys(updated);
+                        handleGeminiApiKeyChange(newKeyValue.trim());
+                        setNewKeyLabel('');
+                        setNewKeyValue('');
+                        setShowNewKeyForm(false);
+                      }}
+                    >
+                      Kaydet
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="button secondary"
+                  style={{ minHeight: 'auto', padding: '8px 16px', marginBottom: '12px', width: '100%' }}
+                  onClick={() => setShowNewKeyForm(true)}
+                >
+                  + Yeni API Anahtarı Ekle
+                </button>
+              )}
+
               <p className="form-help">
                 <span className="icon">info</span>
-                API anahtarını <strong>Google AI Studio</strong>'dan ücretsiz olarak alabilirsiniz
+                API anahtarını <strong>Google AI Studio</strong>'dan ücretsiz olarak alabilirsiniz. Birden fazla anahtar ekleyip aralarında geçiş yapabilirsiniz.
               </p>
               
               <label className="form-label" style={{ marginTop: '20px' }}>
