@@ -45,7 +45,7 @@ interface VideoPlayerProps {
   requestedTimecode: number | null;
   isLoadingVideo: boolean;
   videoError: boolean;
-  jumpToTimecode: (seconds: number) => void;
+  jumpToTimecode: (seconds: number | null) => void;
   onDurationChange: (duration: number) => void;
   onGapClick?: (startTime: string, endTime: string) => void;
 }
@@ -67,6 +67,7 @@ export default function VideoPlayer({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [currentCaptions, setCurrentCaptions] = useState<string[]>([]);
   const [seekSliderValue, setSeekSliderValue] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const currentSecs = duration * scrubberTime || 0;
   const currentPercent = scrubberTime * 100;
   const timecodeListReversed = useMemo(
@@ -150,6 +151,20 @@ export default function VideoPlayer({
     setSeekSliderValue(0);
   }, [video]);
 
+  const skip = useCallback((seconds: number) => {
+    if (!video) return;
+    const newTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+    video.currentTime = newTime;
+    setScrubberTime(newTime / video.duration);
+    setSeekSliderValue((newTime / video.duration) * 100);
+  }, [video]);
+
+  const changeSpeed = useCallback((rate: number) => {
+    if (!video) return;
+    video.playbackRate = rate;
+    setPlaybackRate(rate);
+  }, [video]);
+
   const handleSeekSliderChange = (value: number) => {
     if (!video) return;
     const seekTime = (value / 100) * duration;
@@ -211,24 +226,31 @@ export default function VideoPlayer({
   }, [video, requestedTimecode, jumpToTimecode]);
 
   useEffect(() => {
-    const onKeyPress = (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof Element &&
         e.target.tagName !== 'INPUT' &&
-        e.target.tagName !== 'TEXTAREA' &&
-        e.key === ' '
+        e.target.tagName !== 'TEXTAREA'
       ) {
-        e.preventDefault();
-        togglePlay();
+        if (e.key === ' ') {
+          e.preventDefault();
+          togglePlay();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          skip(-10);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          skip(10);
+        }
       }
     };
 
-    window.addEventListener('keypress', onKeyPress);
+    window.addEventListener('keydown', onKeyDown);
 
     return () => {
-      window.removeEventListener('keypress', onKeyPress);
+      window.removeEventListener('keydown', onKeyDown);
     };
-  }, [togglePlay]);
+  }, [togglePlay, skip]);
 
   return (
     <div className="videoPlayer">
@@ -371,11 +393,31 @@ export default function VideoPlayer({
                 <button onClick={restartVideo} title="Baştan başlat">
                   <span className="icon">replay</span>
                 </button>
+                <button onClick={() => skip(-10)} title="10 saniye geri (←)">
+                  <span className="icon">replay_10</span>
+                </button>
                 <button onClick={togglePlay}>
                   <span className="icon">
                     {isPlaying ? 'pause' : 'play_arrow'}
                   </span>
                 </button>
+                <button onClick={() => skip(10)} title="10 saniye ileri (→)">
+                  <span className="icon">forward_10</span>
+                </button>
+              </div>
+              <div className="speedControls">
+                <select
+                  className="speedSelect"
+                  value={playbackRate}
+                  onChange={(e) => changeSpeed(parseFloat(e.target.value))}
+                  title="Oynatma hızı"
+                >
+                  {[0.25, 0.5, 0.75, 1, 2, 4, 8, 16].map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate}x
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="timeDisplay">
                 {formatTime(currentSecs)} / {formatTime(duration)}

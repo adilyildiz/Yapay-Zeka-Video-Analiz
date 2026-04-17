@@ -1027,6 +1027,28 @@ video {
   justify-content: center;
 }
 
+.speedControls {
+  display: flex;
+  align-items: center;
+}
+
+.speedSelect {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.speedSelect:hover,
+.speedSelect:focus {
+  border-color: var(--primary);
+}
+
 .timeDisplay {
   font-weight: 500;
 }
