@@ -1643,6 +1643,7 @@ ${basePrompt}
                   { value: 20, label: '20s', desc: 'Çok Çok Detaylı' },                  
                   { value: 30, label: '30s', desc: 'Çok Detaylı' },
                   { value: 40, label: '40s', desc: 'Detaylı' },
+                  { value: 50, label: '50s', desc: 'Detaylı' },
                   { value: 60, label: '60s', desc: 'Standart' },
                   { value: 120, label: '120s', desc: 'Hızlı' },
                   { value: 180, label: '180s', desc: 'Daha Hızlı' },

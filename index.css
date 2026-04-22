@@ -1044,6 +1044,12 @@ video {
   transition: border-color 0.2s;
 }
 
+
+.speedSelect option {
+  color: #333333;
+  background-color: #ffffff;
+}
+
 .speedSelect:hover,
 .speedSelect:focus {
   border-color: var(--primary);
