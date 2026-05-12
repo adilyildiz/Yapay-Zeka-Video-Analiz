@@ -47,6 +47,7 @@ interface VideoPlayerProps {
   videoError: boolean;
   jumpToTimecode: (seconds: number | null) => void;
   onDurationChange: (duration: number) => void;
+  onCurrentTimeChange?: (seconds: number) => void;
   onGapClick?: (startTime: string, endTime: string) => void;
 }
 
@@ -58,6 +59,7 @@ export default function VideoPlayer({
   videoError,
   jumpToTimecode,
   onDurationChange,
+  onCurrentTimeChange,
   onGapClick,
 }: VideoPlayerProps) {
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
@@ -181,6 +183,8 @@ export default function VideoPlayer({
 
   const updateTime = () => {
     if (!video) return;
+    onCurrentTimeChange?.(video.currentTime);
+
     if (!isScrubbing) {
       setScrubberTime(video.currentTime / video.duration);
       setSeekSliderValue((video.currentTime / video.duration) * 100);
@@ -202,7 +206,7 @@ export default function VideoPlayer({
           }
         }
       }
-      setCurrentCaptions(activeTexts);
+      setCurrentCaptions(activeTexts.slice(-4));
     }
   };
 
@@ -218,12 +222,13 @@ export default function VideoPlayer({
   useEffect(() => {
     if (video && requestedTimecode !== null) {
       video.currentTime = requestedTimecode;
+      onCurrentTimeChange?.(requestedTimecode);
       // Video zamanı değiştiğinde play state'ini senkronize et
       setIsPlaying(!video.paused);
       // State'i resetle ki aynı marker'a tekrar tıklanabilsin
       jumpToTimecode(null);
     }
-  }, [video, requestedTimecode, jumpToTimecode]);
+  }, [video, requestedTimecode, jumpToTimecode, onCurrentTimeChange]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -256,7 +261,7 @@ export default function VideoPlayer({
     <div className="videoPlayer">
       {url && !isLoadingVideo ? (
         <>
-          <div>
+          <div className="videoFrame">
             <video
               src={url}
               ref={setVideo}
@@ -268,13 +273,17 @@ export default function VideoPlayer({
               onPlay={onPlay}
               onPause={onPause}
             />
+          </div>
 
-            {currentCaptions.length > 0 && (
+          <div className="videoCaptionsPanel" aria-live="polite" aria-atomic="true">
+            {currentCaptions.length > 0 ? (
               <div className="videoCaptionsContainer">
                 {currentCaptions.map((caption, i) => (
                   <div key={i} className="videoCaption">{caption}</div>
                 ))}
               </div>
+            ) : (
+              <div className="videoCaptionsPlaceholder">Bu anda aktif transkript yok</div>
             )}
           </div>
 

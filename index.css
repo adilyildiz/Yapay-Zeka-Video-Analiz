@@ -290,14 +290,14 @@ main {
     border-radius: 8px;
   }
   
-  .videoCaptionsContainer {
-    bottom: 100px;
+  .videoCaptionsPanel {
+    max-height: 120px;
+    padding: 8px 10px;
   }
   
   .videoCaption {
-    font-size: 14px;
-    padding: 8px 12px;
-    max-width: 90%;
+    font-size: 12px;
+    padding: 7px 9px;
   }
   
   .videoControls {
@@ -616,13 +616,15 @@ main {
     max-height: 50vh;
   }
   
-  .videoCaptionsContainer {
-    bottom: 80px;
+  .videoCaptionsPanel {
+    max-height: 100px;
+    min-height: 48px;
+    padding: 6px 8px;
   }
   
   .videoCaption {
-    font-size: 12px;
-    padding: 6px 10px;
+    font-size: 11px;
+    padding: 6px 8px;
   }
   
   .videoControls button {
@@ -854,10 +856,7 @@ video {
   border-radius: 8px;
   overflow: hidden;
 }
-.videoPlayer:has(.timecodeMarker:hover) .videoCaption {
-  opacity: 0;
-}
-.videoPlayer > div:first-child {
+.videoFrame {
   display: flex;
   flex: 1;
   overflow: hidden;
@@ -878,33 +877,39 @@ video {
 }
 
 .videoCaptionsContainer {
-  position: absolute;
-  bottom: 250px;
-  left: 50%;
-  translate: -50% 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  align-items: center;
-  pointer-events: none;
-  z-index: 50;
+}
+
+.videoCaptionsPanel {
+  background: color-mix(in srgb, var(--highlight) 85%, #000 15%);
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  min-height: 56px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.videoCaptionsPlaceholder {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .videoCaption {
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-  text-align: center;
-  padding: 10px;
-  color: #fff;
-  max-width: 90%;
-  font-size: 15px;
-  margin-inline: auto;
-  width: fit-content;
-  border-radius: 5px;
-  transition: opacity 0.2s;
-  pointer-events: auto;
+  background: color-mix(in srgb, var(--background-solid) 84%, #000 16%);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  width: 100%;
+  border-radius: 8px;
 }
 
 .videoControls {
@@ -1136,7 +1141,7 @@ video {
 
 /* Süre bilgisi olan marker'lar için */
 .timecodeMarker.has-duration {
-  width: auto /*!important;*/ /* Style'dan gelen genişliği kullan */
+  width: auto; /* Style'dan gelen genişliği kullan */
   translate: 0 0; /* Ortalama yapma */
   background: rgba(99, 102, 241, 0.15);
   border-left: 2px solid var(--primary);
@@ -1789,6 +1794,13 @@ video {
 }
 
 /* Transcript Delete Styles */
+.row-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.edit-btn,
 .delete-btn {
   display: flex;
   align-items: center;
@@ -1810,12 +1822,21 @@ video {
   flex-grow: 0;
   box-shadow: none !important;
 }
+.edit-btn .icon,
 .delete-btn .icon {
   font-size: 16px;
 }
+.deletable-row:hover .edit-btn,
+.deletable-row:focus-within .edit-btn,
 .deletable-row:hover .delete-btn,
 .deletable-row:focus-within .delete-btn {
   opacity: 0.6;
+}
+.edit-btn:hover {
+  opacity: 1 !important;
+  background: rgba(99, 102, 241, 0.14) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: var(--link) !important;
 }
 .delete-btn:hover {
   opacity: 1 !important;
@@ -1823,6 +1844,7 @@ video {
   border-color: rgba(239, 68, 68, 0.3) !important;
   color: #ef4444 !important;
 }
+.edit-btn:active,
 .delete-btn:active {
   transform: scale(0.9);
 }
@@ -1838,7 +1860,15 @@ video {
   min-width: 0;
 }
 
-/* Table mode delete column */
+/* Table mode action column */
+.actions-col {
+  width: 72px;
+}
+.actions-cell {
+  text-align: center;
+  width: 72px;
+  padding: 4px !important;
+}
 .delete-col {
   width: 36px;
 }
@@ -1853,8 +1883,18 @@ video {
 .panel-content tr.deletable-row:hover {
   background-color: rgba(239, 68, 68, 0.03);
 }
+.panel-content tr.deletable-row.active-transcript-row {
+  background: linear-gradient(90deg, rgb(241 99 99 / 30%), rgb(241 99 99 / 30%));
+  box-shadow: inset 3px 0 0 var(--primary);
+}
 .panel-content tr.deletable-row td[role="button"] {
   cursor: pointer;
+}
+
+.panel-content ul .outputItem.deletable-row.active-transcript-row {
+  background: linear-gradient(90deg, rgb(241 99 99 / 30%), rgb(241 99 99 / 30%));
+  border-radius: 8px;
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 /* Paragraph mode delete button */
@@ -1871,8 +1911,41 @@ video {
   vertical-align: middle;
   margin-left: 2px;
 }
+.paragraph-output .sentence.deletable-row .edit-btn {
+  width: 18px;
+  height: 18px;
+  min-height: 18px !important;
+  vertical-align: middle;
+}
+.paragraph-output .sentence.deletable-row .edit-btn .icon,
 .paragraph-output .sentence.deletable-row .delete-btn .icon {
   font-size: 12px;
+}
+
+.transcript-edit-form {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--highlight);
+}
+
+.transcript-edit-form h4 {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.transcript-edit-modal {
+  max-width: 760px;
+  width: min(92vw, 760px);
+}
+
+.transcript-edit-modal .time-input-group {
+  margin-bottom: 10px;
+}
+
+.transcript-edit-modal textarea {
+  width: 100%;
 }
 
 /* Danger button style for delete range */
@@ -1925,8 +1998,18 @@ video {
 .paragraph-output:hover .sentence {
   opacity: 0.6;
 }
+.paragraph-output:hover .sentence.active-transcript-row {
+  opacity: 1;
+}
 .paragraph-output .sentence:hover {
   opacity: 1;
+}
+
+.paragraph-output .sentence.active-transcript-row {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.24), rgba(99, 102, 241, 0.06));
+  border-radius: 6px;
+  box-shadow: inset 3px 0 0 var(--primary);
+  padding-inline: 4px;
 }
 
 .srt-actions {

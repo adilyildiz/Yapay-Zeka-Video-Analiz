@@ -107,10 +107,77 @@ function parseXlsxFile(data: ArrayBuffer): any[] {
 
   return timecodes;
 }
+
+function extractCategoryAndDescription(item: any): {category: string; description: string} {
+  const categoryFromField = Array.isArray(item?.category)
+    ? item.category.join(', ')
+    : String(item?.category || '').trim();
+  const descriptionFromField = String(item?.description || '').trim();
+
+  if (categoryFromField || descriptionFromField) {
+    return {
+      category: categoryFromField,
+      description: descriptionFromField,
+    };
+  }
+
+  const text = String(item?.text || '').trim();
+  const categoryMatch = text.match(/^\[(.*?)\]\s*:?\s*(.*)/);
+  if (categoryMatch) {
+    return {
+      category: String(categoryMatch[1] || '').trim(),
+      description: String(categoryMatch[2] || '').trim(),
+    };
+  }
+
+  return {
+    category: '',
+    description: text,
+  };
+}
+
+function formatTranscriptText(categoryInput: string, descriptionInput: string): string {
+  const category = categoryInput.trim();
+  const description = descriptionInput.trim();
+  return category ? `[${category}]: ${description}` : description;
+}
+
+function parseCategoryInput(categoryInput: string): string | string[] | undefined {
+  const categories = categoryInput
+    .split(',')
+    .map((cat) => cat.trim())
+    .filter(Boolean);
+
+  if (categories.length === 0) return undefined;
+  if (categories.length === 1) return categories[0];
+  return categories;
+}
+
+function findActiveTranscriptIndex(timecodes: any[] | null, currentSeconds: number): number {
+  if (!timecodes || timecodes.length === 0) return -1;
+
+  for (let i = 0; i < timecodes.length; i++) {
+    const current = timecodes[i];
+    const start = timeToSecs(current.startTime || current.time);
+    const nextStart = i < timecodes.length - 1
+      ? timeToSecs(timecodes[i + 1].startTime || timecodes[i + 1].time)
+      : Number.POSITIVE_INFINITY;
+    const specifiedEnd = current.endTime ? timeToSecs(current.endTime) : start;
+    const effectiveEnd = Math.max(specifiedEnd, Math.min(start + 1, nextStart));
+
+    if (currentSeconds >= start && currentSeconds <= effectiveEnd) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
 function saveModePreferences(
   mode: string, customPrompt: string, chartMode: string, chartPrompt: string,
   categoricalMode: string, categoricalPrompt: string,
-  chunkDuration: number | 'all', ollamaSendMode: 'frame' | 'video'
+  chunkDuration: number | 'all', ollamaSendMode: 'frame' | 'video',
+  initialScanContextMode: 'contextual' | 'independent'
 ) {
   const preferences = {
     selectedMode: mode,
@@ -121,6 +188,7 @@ function saveModePreferences(
     categoricalPrompt,
     chunkDuration,
     ollamaSendMode,
+    initialScanContextMode,
   };
   localStorage.setItem('modePreferences', JSON.stringify(preferences));
 }
@@ -196,6 +264,9 @@ export default function App() {
   const [currentAPIConfig, setCurrentAPIConfig] = useState<APIConfig>(getCurrentConfig());
   const [currentProvider, setCurrentProvider] = useState<string>('Google Gemini');
   const [chunkDuration, setChunkDuration] = useState<number | 'all'>(savedPreferences?.chunkDuration ?? 60);
+  const [initialScanContextMode, setInitialScanContextMode] = useState<'contextual' | 'independent'>(
+    savedPreferences?.initialScanContextMode || 'contextual',
+  );
   const [analysisRangeStart, setAnalysisRangeStart] = useState<string>('');
   const [analysisRangeEnd, setAnalysisRangeEnd] = useState<string>('');
   const [reanalysisStartTime, setReanalysisStartTime] = useState<string>('');
@@ -207,12 +278,21 @@ export default function App() {
   const [analyzedChunks, setAnalyzedChunks] = useState<{start: number, end: number}[]>([]);
   const [ollamaSendMode, setOllamaSendMode] = useState<'frame' | 'video'>(savedPreferences?.ollamaSendMode || 'frame');
   const [importedTranscriptName, setImportedTranscriptName] = useState<string>('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editStartTime, setEditStartTime] = useState<string>('');
+  const [editEndTime, setEditEndTime] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [editLocation, setEditLocation] = useState<string>('');
+  const [activeTranscriptIndex, setActiveTranscriptIndex] = useState<number>(-1);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<globalThis.File | null>(null);
   // FIX: Changed HTMLElement to HTMLDivElement to match the element type it's referencing.
   const scrollRef = useRef<HTMLDivElement>(null);
+  const transcriptItemRefs = useRef<Record<number, HTMLElement | null>>({});
+  const suppressAutoScrollUntilRef = useRef<number>(0);
   const cancelAnalysisRef = useRef<boolean>(false);
   const isCustomMode = selectedMode === 'Özel';
   const isChartMode = selectedMode === 'Grafik';
@@ -274,8 +354,28 @@ export default function App() {
 
   // Mode preferences'ları localStorage'a kaydet
   useEffect(() => {
-    saveModePreferences(selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt, chunkDuration, ollamaSendMode);
-  }, [selectedMode, customPrompt, chartMode, chartPrompt, categoricalMode, categoricalPrompt, chunkDuration, ollamaSendMode]);
+    saveModePreferences(
+      selectedMode,
+      customPrompt,
+      chartMode,
+      chartPrompt,
+      categoricalMode,
+      categoricalPrompt,
+      chunkDuration,
+      ollamaSendMode,
+      initialScanContextMode,
+    );
+  }, [
+    selectedMode,
+    customPrompt,
+    chartMode,
+    chartPrompt,
+    categoricalMode,
+    categoricalPrompt,
+    chunkDuration,
+    ollamaSendMode,
+    initialScanContextMode,
+  ]);
 
   // İlk yüklemede submode gerektiren mod varsa, direkt submode ekranına geç
   useEffect(() => {
@@ -318,6 +418,50 @@ export default function App() {
       video.removeEventListener('loadedmetadata', handleMetadataLoaded);
     };
   }, [vidUrl]);
+
+  useEffect(() => {
+    if (editingIndex === null) return;
+    if (!timecodeList || editingIndex < 0 || editingIndex >= timecodeList.length) {
+      setEditingIndex(null);
+    }
+  }, [editingIndex, timecodeList]);
+
+  useEffect(() => {
+    if (editingIndex === null) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        handleCancelEditTimecode();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [editingIndex]);
+
+  const handleCurrentTimeChange = (seconds: number) => {
+    const nextIndex = findActiveTranscriptIndex(timecodeList, seconds);
+    setActiveTranscriptIndex((prev) => (prev === nextIndex ? prev : nextIndex));
+  };
+
+  const handleTranscriptSeek = (seconds: number) => {
+    suppressAutoScrollUntilRef.current = Date.now() + 1200;
+    setRequestedTimecode(seconds);
+  };
+
+  useEffect(() => {
+    if (step !== 'results' || isLoading || activeTranscriptIndex < 0) return;
+    if (Date.now() < suppressAutoScrollUntilRef.current) return;
+
+    const activeElement = transcriptItemRefs.current[activeTranscriptIndex];
+    if (!activeElement) return;
+
+    activeElement.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    });
+  }, [activeTranscriptIndex, step, isLoading]);
 
   const setTimecodes = ({timecodes}: {timecodes: any[]}) =>
     setTimecodeList(
@@ -656,6 +800,7 @@ export default function App() {
     }
 
     let previousChunkSummary = '';
+    const useCrossChunkContext = initialScanContextMode === 'contextual';
 
     for (let i = 0; i < numChunks; i++) {
         // İptal kontrolü
@@ -669,7 +814,7 @@ export default function App() {
         );
 
         // Önceki parçanın bağlam bilgisi
-        const continuityContext = previousChunkSummary ? `
+        const continuityContext = useCrossChunkContext && previousChunkSummary ? `
 ### ÖNCEKİ PARÇANIN BAĞLAMI (TUTARLILIK İÇİN ÖNEMLİ)
 Aşağıda bir önceki video parçasının son olayları verilmiştir. Bu bağlamı kullanarak:
 - Aynı nesneleri, karakterleri ve öğeleri AYNI İSİMLERLE tanımla (örn: önceki parçada "mavi canavar" dediysen, bu parçada da "mavi canavar" de).
@@ -901,7 +1046,7 @@ ${basePrompt}
                     allTimecodes = allTimecodes.concat(chunkTimecodes);
 
                     // Sonraki parça için bağlam özeti oluştur (son 5 olayı al)
-                    if (chunkTimecodes.length > 0) {
+                    if (useCrossChunkContext && chunkTimecodes.length > 0) {
                       const lastEvents = chunkTimecodes.slice(-5);
                       previousChunkSummary = `Önceki parça (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)}) son olayları:\n` +
                         lastEvents.map((tc: any) => {
@@ -941,7 +1086,8 @@ ${basePrompt}
 
         } catch (e) {
             console.error(`Error processing chunk ${i + 1}:`, e);
-            overallError = (overallError || '') + `Parça ${i + 1} işlenirken bir hata oluştu: ${e.message}. `;
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          overallError = (overallError || '') + `Parça ${i + 1} işlenirken bir hata oluştu: ${errorMessage}. `;
             break;
         }
     }
@@ -1319,7 +1465,8 @@ ${basePrompt}
 
       } catch (e) {
         console.error(`Error processing reanalysis chunk ${i + 1}:`, e);
-        reanalysisError = `Yeniden analiz parçası ${i + 1} işlenirken hata: ${e.message}`;
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        reanalysisError = `Yeniden analiz parçası ${i + 1} işlenirken hata: ${errorMessage}`;
         break;
       }
     }
@@ -1358,6 +1505,77 @@ ${basePrompt}
     if (!timecodeList) return;
     const updated = timecodeList.filter((_, i) => i !== index);
     setTimecodeList(updated.length > 0 ? updated : null);
+
+    if (editingIndex === null) return;
+    if (editingIndex === index) {
+      setEditingIndex(null);
+      return;
+    }
+    if (editingIndex > index) {
+      setEditingIndex(editingIndex - 1);
+    }
+  };
+
+  const handleStartEditTimecode = (index: number) => {
+    if (!timecodeList || !timecodeList[index]) return;
+
+    const selected = timecodeList[index];
+    const {category, description} = extractCategoryAndDescription(selected);
+
+    setEditingIndex(index);
+    setEditStartTime(String(selected.startTime || selected.time || '').trim());
+    setEditEndTime(String(selected.endTime || selected.startTime || selected.time || '').trim());
+    setEditCategory(category);
+    setEditDescription(description);
+    setEditLocation(String(selected.location || '').trim());
+    setAnalysisWarning(`✏️ Düzenleme modu açıldı (satır #${index + 1}).`);
+  };
+
+  const handleCancelEditTimecode = () => {
+    setEditingIndex(null);
+    setEditStartTime('');
+    setEditEndTime('');
+    setEditCategory('');
+    setEditDescription('');
+    setEditLocation('');
+  };
+
+  const handleSaveEditTimecode = () => {
+    if (!timecodeList || editingIndex === null || !timecodeList[editingIndex]) return;
+
+    const startTime = editStartTime.trim();
+    const endTime = editEndTime.trim();
+
+    if (!startTime) {
+      setAnalysisError('Düzenleme için başlangıç zamanı boş bırakılamaz.');
+      return;
+    }
+
+    if (parseTimeToSeconds(startTime) > parseTimeToSeconds(endTime || startTime)) {
+      setAnalysisError('Düzenlemede başlangıç zamanı, bitiş zamanından büyük olamaz.');
+      return;
+    }
+
+    const safeEndTime = endTime || startTime;
+    const normalizedCategory = parseCategoryInput(editCategory);
+    const updatedText = formatTranscriptText(editCategory, editDescription);
+
+    const updatedList = [...timecodeList];
+    updatedList[editingIndex] = {
+      ...updatedList[editingIndex],
+      time: startTime,
+      startTime,
+      endTime: safeEndTime,
+      category: normalizedCategory,
+      description: editDescription.trim(),
+      location: editLocation.trim() || undefined,
+      text: updatedText,
+    };
+
+    setTimecodeList(updatedList);
+    setAnalysisError(null);
+    setAnalysisWarning('✏️ Transkript satırı güncellendi.');
+    handleCancelEditTimecode();
   };
 
   // Belirli zaman aralığındaki transkriptleri toplu silme
@@ -1417,6 +1635,8 @@ ${basePrompt}
     setDeleteRangeEnd('');
     setAnalyzedChunks([]);
     setImportedTranscriptName('');
+    setActiveTranscriptIndex(-1);
+    handleCancelEditTimecode();
 
     // Mod ayarlarını localStorage'dan geri yükle (sıfırlama yerine)
     setSelectedMode(saved?.selectedMode || 'Detaylı Transkript');
@@ -1427,6 +1647,7 @@ ${basePrompt}
     setCategoricalMode(saved?.categoricalMode || categoricalModes[0]);
     setChunkDuration(saved?.chunkDuration ?? 60);
     setOllamaSendMode(saved?.ollamaSendMode || 'frame');
+    setInitialScanContextMode(saved?.initialScanContextMode || 'contextual');
 
     // Mod seçim ekranını belirle
     const restoredMode = saved?.selectedMode || 'Detaylı Transkript';
@@ -1654,7 +1875,7 @@ ${basePrompt}
                   <button
                     key={option.value}
                     className={c('chunk-option', { active: chunkDuration === option.value })}
-                    onClick={() => setChunkDuration(option.value)}
+                    onClick={() => setChunkDuration(option.value as number | 'all')}
                   >
                     <strong>{option.label}</strong>
                     <span>{option.desc}</span>
@@ -1710,6 +1931,39 @@ ${basePrompt}
                 </div>
               </div>
             )}
+
+            <div className="setting-group">
+              <label className="setting-label">
+                <span className="icon">account_tree</span>
+                İlk Tarama Bağlam Modu
+              </label>
+              <p className="setting-description">
+                Video parçalara ayrıldığında her parça bağımsız mı analiz edilsin, yoksa önceki parçaların transkript özetiyle birlikte mi gönderilsin?
+              </p>
+              <div className="chunk-duration-options">
+                <button
+                  className={c('chunk-option', { active: initialScanContextMode === 'independent' })}
+                  onClick={() => setInitialScanContextMode('independent')}
+                >
+                  <strong>Bağımsız</strong>
+                  <span>Parçalar sıfırdan analiz edilir</span>
+                </button>
+                <button
+                  className={c('chunk-option', { active: initialScanContextMode === 'contextual' })}
+                  onClick={() => setInitialScanContextMode('contextual')}
+                >
+                  <strong>Bağlamlı</strong>
+                  <span>Önceki parça özeti sonraki parçaya eklenir</span>
+                </button>
+              </div>
+              <div className="chunk-info">
+                {initialScanContextMode === 'contextual' ? (
+                  <p>🔗 Parçalar arası tutarlılık için önceki parçaların özeti kullanılır.</p>
+                ) : (
+                  <p>🧩 Her parça ayrı değerlendirilir, önceki parçalardan bağlam gönderilmez.</p>
+                )}
+              </div>
+            </div>
 
             {/* Analiz Aralığı Seçimi */}
             {videoDuration > 0 && (
@@ -1840,6 +2094,7 @@ ${basePrompt}
             isLoadingVideo={isLoadingVideo}
             videoError={videoError}
             onDurationChange={setVideoDuration}
+            onCurrentTimeChange={handleCurrentTimeChange}
             onGapClick={(start, end) => {
               setReanalysisStartTime(start);
               setReanalysisEndTime(end);
@@ -2099,24 +2354,42 @@ ${basePrompt}
                           <th>Bitiş</th>
                           <th>Açıklama</th>
                           <th>Nesneler</th>
-                          <th className="delete-col"></th>
+                          <th className="actions-col"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {timecodeList.map(({time, text, objects, startTime, endTime}, i) => (
-                          <tr key={i} className="deletable-row">
-                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}><time>{startTime || time}</time></td>
-                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}><time>{endTime || '-'}</time></td>
-                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>{text}</td>
-                            <td role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>{objects?.join(', ')}</td>
-                            <td className="delete-cell">
-                              <button
-                                className="delete-btn"
-                                onClick={(e) => { e.stopPropagation(); handleDeleteTimecode(i); }}
-                                title="Bu satırı sil"
-                              >
-                                <span className="icon">close</span>
-                              </button>
+                          <tr
+                            key={i}
+                            ref={(el) => {
+                              transcriptItemRefs.current[i] = el;
+                            }}
+                            className={c('deletable-row', {
+                              'active-transcript-row': i === activeTranscriptIndex,
+                            })}>
+                            <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}><time>{startTime || time}</time></td>
+                            <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}><time>{endTime || '-'}</time></td>
+                            <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>{text}</td>
+                            <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>{objects?.join(', ')}</td>
+                            <td className="actions-cell">
+                              <div className="row-action-buttons">
+                                <button
+                                  type="button"
+                                  className="edit-btn"
+                                  onClick={(e) => { e.stopPropagation(); handleStartEditTimecode(i); }}
+                                  title="Bu satırı düzenle"
+                                >
+                                  <span className="icon">edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="delete-btn"
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteTimecode(i); }}
+                                  title="Bu satırı sil"
+                                >
+                                  <span className="icon">close</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2132,18 +2405,36 @@ ${basePrompt}
                           : time;
                         
                         return (
-                          <li key={i} className="outputItem deletable-row">
-                            <button onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
+                          <li
+                            key={i}
+                            ref={(el) => {
+                              transcriptItemRefs.current[i] = el;
+                            }}
+                            className={c('outputItem', 'deletable-row', {
+                              'active-transcript-row': i === activeTranscriptIndex,
+                            })}>
+                            <button onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>
                               <time>{displayTime}</time>
                               <p className="text">{text}</p>
                             </button>
-                            <button
-                              className="delete-btn"
-                              onClick={() => handleDeleteTimecode(i)}
-                              title="Bu satırı sil"
-                            >
-                              <span className="icon">close</span>
-                            </button>
+                            <div className="row-action-buttons">
+                              <button
+                                type="button"
+                                className="edit-btn"
+                                onClick={(e) => { e.stopPropagation(); handleStartEditTimecode(i); }}
+                                title="Bu satırı düzenle"
+                              >
+                                <span className="icon">edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="delete-btn"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTimecode(i); }}
+                                title="Bu satırı sil"
+                              >
+                                <span className="icon">close</span>
+                              </button>
+                            </div>
                           </li>
                         );
                       })}
@@ -2156,18 +2447,36 @@ ${basePrompt}
                           : time;
                         
                         return (
-                          <span key={i} className="sentence deletable-row">
-                            <span role="button" onClick={() => setRequestedTimecode(timeToSecs(startTime || time))}>
+                          <span
+                            key={i}
+                            ref={(el) => {
+                              transcriptItemRefs.current[i] = el;
+                            }}
+                            className={c('sentence', 'deletable-row', {
+                              'active-transcript-row': i === activeTranscriptIndex,
+                            })}>
+                            <span role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>
                               <time>{displayTime}</time>
                               <span>{text}</span>
                             </span>
-                            <button
-                              className="delete-btn"
-                              onClick={() => handleDeleteTimecode(i)}
-                              title="Bu satırı sil"
-                            >
-                              <span className="icon">close</span>
-                            </button>
+                            <span className="row-action-buttons">
+                              <button
+                                type="button"
+                                className="edit-btn"
+                                onClick={(e) => { e.stopPropagation(); handleStartEditTimecode(i); }}
+                                title="Bu satırı düzenle"
+                              >
+                                <span className="icon">edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="delete-btn"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTimecode(i); }}
+                                title="Bu satırı sil"
+                              >
+                                <span className="icon">close</span>
+                              </button>
+                            </span>
                           </span>
                         );
                       })}
@@ -2220,6 +2529,84 @@ ${basePrompt}
           {step === 'mode' && renderModeScreen()}
           {step === 'results' && !isLoading && renderResultsScreen()}
         </>
+      )}
+      {editingIndex !== null && (
+        <div className="modal-backdrop" onClick={handleCancelEditTimecode}>
+          <div className="modal-content transcript-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Transkript Satırı Düzenle #{editingIndex + 1}</h2>
+              <button type="button" className="modal-close" onClick={handleCancelEditTimecode}>
+                <span className="icon">close</span>
+              </button>
+            </div>
+
+            <div className="time-inputs">
+              <div className="time-input-group">
+                <label htmlFor="edit-start-time">Başlangıç</label>
+                <input
+                  id="edit-start-time"
+                  type="text"
+                  placeholder="00:00:00"
+                  value={editStartTime}
+                  onChange={(e) => setEditStartTime(e.target.value)}
+                />
+              </div>
+              <div className="time-input-group">
+                <label htmlFor="edit-end-time">Bitiş</label>
+                <input
+                  id="edit-end-time"
+                  type="text"
+                  placeholder="00:00:00"
+                  value={editEndTime}
+                  onChange={(e) => setEditEndTime(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="time-input-group">
+              <label htmlFor="edit-category">Kategori</label>
+              <input
+                id="edit-category"
+                type="text"
+                placeholder="Örn: go response, action points"
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+              />
+            </div>
+
+            <div className="time-input-group">
+              <label htmlFor="edit-description">Açıklama</label>
+              <textarea
+                id="edit-description"
+                rows={3}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+              />
+            </div>
+
+            <div className="time-input-group">
+              <label htmlFor="edit-location">Konum (opsiyonel)</label>
+              <input
+                id="edit-location"
+                type="text"
+                placeholder="Örn: Sol üst"
+                value={editLocation}
+                onChange={(e) => setEditLocation(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="button" onClick={handleSaveEditTimecode}>
+                <span className="icon">save</span>
+                Kaydet
+              </button>
+              <button type="button" className="button secondary" onClick={handleCancelEditTimecode}>
+                <span className="icon">close</span>
+                Vazgeç
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       <APISettings
         isOpen={isAPISettingsOpen}
