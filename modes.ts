@@ -69,9 +69,9 @@ const modes: Record<string, Mode> = {
 
 ### 5. Oyun-Spesifik Bağlam
 Bu videolarda şu oyunlardan biri oynuyor olabilir. Eğer tanırsan, o oyuna özel detaylara dikkat et:
-- **Gwakkamole (Go/No-Go):** Avokado şekilli canavarlar. KASKLI/MİĞFERLİ avokado = No-Go hedefi (VURMA!), KASKSIZ avokado = Go hedefi (VUR!). ÖNEMLİ: Kasklı avokado ekranda belirdiğinde bu bir inhibisyon anıdır. Oyuncunun tıklamaması (başarılı inhibisyon) veya tıklaması (başarısız inhibisyon) en kritik verilerdir — MUTLAKA kaydet.
-- **Crush Stations (Working Memory):** Renkli baloncuklar içinde deniz ürünleri. Oyuncu, baloncukların rengini ve şeklini hafızada tutup, kaybolan baloncuğun özelliklerini seçer. Her baloncuk belirme, kaybolma ve seçim anını ayrı ayrı raporla.
-- **All You Can E.T. (Task Switching):** Yiyecek/içecekleri kurallara göre canavarlara atma. Seviye içinde kurallar değişebilir. Kural değişim anları, eski kurala göre hatalı hareketler ve yeni kurala adaptasyon EN ÖNEMLİ anlardır — ATLAMA.`,
+- **Gwakkamole (Go/No-Go):** Avokado şekilli canavarlar. KASKLI/MİĞFERLİ avokado = No-Go hedefi (VURMA!), KASKSIZ avokado = Go hedefi (VUR!). Her avokadoyu tespit ettiğinde ÖNCE baş bölgesini incele: başın üstünde/çevresinde herhangi bir nesne, kask, miğfer, baret veya koruyucu aksesuar varsa → KESİNLİKLE KASKLIYDIR (No-Go). Baş bölgesi tamamen boş ve sadeyse → kasksızdır (Go). Şüphe durumunda kasklı say. ÖNEMLİ: Kasklı avokado ekranda belirdiğinde bu bir inhibisyon anıdır. Oyuncunun tıklamaması (başarılı inhibisyon) veya tıklaması (başarısız inhibisyon) en kritik verilerdir — MUTLAKA kaydet.
+- **Crush Stations (Working Memory):** Renkli baloncuklar içinde deniz canlıları geliyor. Baloncuklar sırayla ekrandan kayboluyor (bazen 2'li veya 3'lü gruplar hâlinde). Her kaybolmadan sonra oyuncuya açılan çemberden (seçim arayüzü) kaybolan balonun rengi ve içindeki canlı türü soruluyor. Yanlış seçimde ahtapot deniz canlısını yiyor. Her baloncuk belirme, kaybolma ve seçim anını ayrı ayrı raporla.
+- **All You Can E.T. (Task Switching):** Ekranın alt kısmında süt ve kek gibi yiyecek/içecek düğmeleri beliriyor; oyuncu aktif kurala göre doğru düğmeye tıklayarak ilgili canavara gönderiyor. Canavarlar ekranda belirme sırasına göre sıraya giriyor; oyuncu sırayı takip ederek doğru canavar için doğru düğmeyi seçmeli. Seviye içinde kurallar değişebilir. Kural değişim anları, eski kurala göre hatalı tıklamalar ve yeni kurala adaptasyon EN ÖNEMLİ anlardır — ATLAMA.`,
     isList: true,
   },
   
@@ -134,19 +134,25 @@ Aşağıdaki görsel olayları tespit ettiğinde, belirtilen kategorileri MUTLAK
 | Normal avokadoya tıklandı | \`go response\`, \`click/tap\`, \`action points\` |
 | Ekranda hem kasklı hem kasksız avokado var | \`inhibitory control\`, \`selective attention\`, \`decision making\` |
 
-**Crush Stations (renkli baloncuklar + deniz ürünleri görüyorsan):**
+**Crush Stations (renkli baloncuklar + deniz canlıları görüyorsan):**
 | Görsel Olay | ZORUNLU Kategoriler |
 |---|---|
 | Yeni baloncuklar ekranda belirdi | \`working memory\`, \`encoding\`, \`attention\` |
-| Baloncuk ekrandan kayboldu | \`working memory\`, \`memory recall\` |
-| Oyuncu seçim yapıyor | \`working memory\`, \`decision making\`, \`memory recall\` |
+| Baloncuk (tekli/ikili/üçlü) ekrandan kayboldu | \`working memory\`, \`memory recall\` |
+| Çember seçim arayüzü açıldı | \`working memory\`, \`memory recall\`, \`decision making\` |
+| Oyuncu renk veya canlı türü seçti | \`working memory\`, \`decision making\`, \`memory recall\` |
+| Doğru seçim yapıldı | \`working memory\`, \`feedback\` |
+| Yanlış seçim yapıldı (ahtapot yedi) | \`working memory\`, \`error detection\`, \`feedback\` |
 
-**All You Can E.T. (yiyecek/içecek + canavarlar + kurallar görüyorsan):**
+**All You Can E.T. (yiyecek/içecek düğmeleri + canavarlar + kurallar görüyorsan):**
 | Görsel Olay | ZORUNLU Kategoriler |
 |---|---|
+| Yeni canavar ekranda belirdi (sıraya girdi) | \`object appearance\`, \`attention\`, \`sequencing\` |
+| Süt veya kek düğmesi ekranda belirdi | \`object appearance\`, \`decision making\` |
+| Oyuncu doğru düğmeye tıkladı (kurala uygun) | \`cognitive flexibility\`, \`decision making\`, \`click/tap\` |
 | Kural değişti | \`cognitive flexibility\`, \`task switching\`, \`rule change\` |
-| Eski kurala göre hareket edildi (hata) | \`cognitive flexibility\`, \`perseveration\`, \`inhibitory control\` |
-| Yeni kurala doğru uyum | \`cognitive flexibility\`, \`adaptation\`, \`task switching\` |
+| Eski kurala göre yanlış düğmeye tıklandı (hata) | \`cognitive flexibility\`, \`perseveration\`, \`inhibitory control\`, \`error detection\` |
+| Yeni kurala doğru uyum (ilk doğru tıklama) | \`cognitive flexibility\`, \`adaptation\`, \`task switching\` |
 
 ### 5.1 Bilişsel Kategori Tespit Rehberi
 Bilişsel kategoriler doğrudan gözlenemez; ekrandaki görsel olaylardan çıkarılır. Aşağıdaki rehberi kullan:
@@ -182,6 +188,23 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
   - **No-Go hedefi (VURMA!):** Kasklı / miğferli / korumalı yeşil avokado canavar. Başında kask, miğfer veya koruyucu aksesuar olan avokado = VURULMAMASI GEREKEN hedeftir.
   - **Go hedefi (VUR!):** Kasksız / normal / korumasız avokado canavar. Başında aksesuar olmayan sade avokado = vurulacak hedeftir.
   - ⚠️ **KURAL:** Ekranda kasklı/miğferli/korumalı bir avokado gördüğünde, BU BİR İNHİBİSYON ANIDIR. \`inhibitory control\` ve \`no-go response\` kategorilerini MUTLAKA ata.
+
+- **🔍 ZORUNLU GÖRSEL DOĞRULAMA PROTOKOLÜ — Her avokado için bu adımları sırayla uygula:**
+  1. **Baş bölgesini önce incele:** Avokadoyu tespit ettiğinde, ÖNCE baş bölgesine bak. Başın üstünde, yanında veya çevresinde herhangi bir nesne var mı?
+  2. **Kasklı/miğferli göstergeler (bunlardan HERHANGİ BİRİ varsa = No-Go):**
+     - Başın üstünde sert/dolu bir nesne (kask, baret, miğfer şeklinde)
+     - Başı örten veya kapatan bir aksesuar
+     - Başın çevresinde belirgin bir koruyucu bant veya şerit
+     - Başında asker kaskı, futbol kaskı, inşaat bareti veya benzeri bir yapı
+     - Başının üzerinde çıkıntı yapan, baştan ayrı görünen herhangi bir nesne
+  3. **Kasksız göstergeler (bunların TÜMÜ geçerliyse = Go):**
+     - Baş bölgesi tamamen açık ve sade
+     - Başın üzerinde SIFIR aksesuar, nesne veya çıkıntı
+     - Sadece yüz ifadesi görünüyor, başın üstü tamamen boş
+  4. **Şüphe kuralı:** Baş bölgesinde herhangi bir nesne olup olmadığından EMIN DEĞİLSEN → O avokadoyu hiç raporlama, transkripte dahil etme. Yanlış sınıflandırılmış bir kayıt, hiç kayıt olmamasından daha kötüdür.
+  5. **Sınıflandırmayı description'a yaz:** Her avokadoyu raporlarken description'da mutlaka "Kasklı" veya "Kasksız" olarak açıkça belirt ve neye dayanarak bu kararı verdiğini tek cümleyle açıkla (örn: "Başının üstünde turuncu renkli bir kask görünüyor → Kasklı (No-Go)" veya "Başı tamamen sade, üstünde hiçbir nesne yok → Kasksız (Go)").
+
+- **❌ EN KRİTİK HATA:** Kasklı bir avokadoyu "kasksız" olarak sınıflandırmak. Bu hata, tüm inhibisyon verisini bozar. Kasklı avokadoyu kasksız saymak KABUL EDİLEMEZ.
 - **Kritik Tespit Anları:**
   - **İNHİBİSYON BAŞARISI:** Kasklı avokado (No-Go hedefi) ekranda belirip oyuncu TIKLAMADAN beklediğinde → \`inhibitory control\`, \`inhibition success\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokado (No-Go hedefi) belirdi, oyuncu tıklamaktan başarıyla kaçındı — inhibisyon başarılı" yaz.
   - **İNHİBİSYON BAŞARISIZLIĞI:** Kasklı avokadoya (No-Go hedefine) tıklanırsa → \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokadoya (No-Go hedefi) tıklandı — dürtü kontrolü başarısız, inhibisyon hatası" yaz.
@@ -191,36 +214,59 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
 - **Görsel İpuçları:** Yeşil avokado şekilli canavarlar; No-Go = kasklı/miğferli, Go = kasksız/sade. Tokmak/çekiç animasyonu tıklamayı gösterir. Kırmızı X veya negatif puan = hatalı tıklama.
 - **ÖNEMLİ:** Bu oyunda her canavar belirme ve kaybolma anını kaydet. Kasklı avokado ekranda belirdiği AN bir inhibisyon tetikleyicisidir — bu olayı \`inhibitory control\` kategorisi OLMADAN raporlama. No-Go canavarının ekranda kalıp tıklanmadan kaybolması EN ÖNEMLİ inhibisyon verisidir — ASLA ATLAMA.
 
-#### 🔵 Crush Stations (Working Memory + Inhibition)
+#### 🔵 Crush Stations (Working Memory)
 - **Kaynak:** NYU CREATE
-- **Oyun Tanımı:** Ekranda renkli baloncuklar içinde deniz ürünleri (balık, yengeç, ahtapot vb.) gelir. Oyuncu bunların rengini ve şeklini hafızada tutmalıdır. Baloncuklar ekranın soluna doğru hareket eder ve bir tanesi kaybolur. Oyuncunun, kaybolan baloncuğun özelliklerini (renk + şekil) doğru seçmesi istenir.
-- **Birincil Yürütücü İşlevler:** Working Memory, Inhibition, Görsel Dikkat
+- **Oyun Tanımı:** Ekranda renkli baloncuklar içinde deniz canlıları (balık, yengeç, denizyıldızı vb.) belirir. Oyuncu tüm baloncukların rengini ve içindeki canlı türünü hafızaya alır. Ardından baloncuklar sırayla ekrandan kaybolur — kaybolma tekli, ikili veya üçlü gruplar hâlinde gerçekleşebilir. Her kaybolma sonrasında ekranda dairesel bir seçim arayüzü (çember) açılır; oyuncu bu çemberden kaybolan balonun rengini ve içindeki canlı türünü seçerek soruyu yanıtlar. Yanlış seçim yapılırsa ahtapot deniz canlısını yer (ceza animasyonu). Doğru seçimde olumlu geri bildirim verilir.
+- **Birincil Yürütücü İşlev:** Working Memory (Çalışma Belleği), Görsel Dikkat
+
+- **🔍 TEMEL MEKANİK — Her turda şu sıra işler:**
+  1. Yeni baloncuklar ekranda belirir — oyuncu her balonun rengini ve içindeki canlıyı hafızaya almalıdır.
+  2. Baloncuklar bir süre ekranda kalır (hafızaya alma aşaması).
+  3. Baloncuklardan biri (veya 2-3 tanesi birden) ekrandan kaybolur.
+  4. Dairesel çember seçim arayüzü açılır: oyuncu kaybolan balonun rengini seçer, ardından içindeki canlı türünü seçer.
+  5. Doğru → olumlu geri bildirim. Yanlış → ahtapot o canlıyı yer (ceza animasyonu).
+  - ⚠️ Kaybolma ikili/üçlü olduğunda her kaybolan balon için ayrı soru sorulabilir. Bu durumda her soruyu ayrı olay olarak raporla.
+
 - **Kritik Tespit Anları:**
-  - **KODLAMA (ENCODING):** Yeni baloncuklar ekranda belirdiğinde → \`working memory\` + \`attention\` kategorisi. Description'da kaç baloncuk olduğunu, renklerini ve içindeki deniz ürünlerini listele.
-  - **HAFIZADA TUTMA (MAINTENANCE):** Baloncuklar hareket ederken ve oyuncu bunları izlerken → \`working memory\` + \`sustained attention\` kategorisi.
-  - **KAYBOLMA ANI:** Bir baloncuk ekranın solundan kaybolduğunda → \`working memory\` + \`memory recall\` kategorisi. Description'da "X renkli Y şekilli baloncuk kayboldu, oyuncunun bunu hatırlaması gerekiyor" yaz.
-  - **SEÇME/KARAR ANI:** Oyuncu kaybolan baloncuğun özelliklerini seçerken → \`working memory\` + \`decision making\` + \`memory recall\` kategorisi.
-  - **DOĞRU CEVAP:** Doğru renk ve şekil seçildiğinde → \`working memory\` + olumlu geri bildirim.
-  - **YANLIŞ CEVAP:** Yanlış seçim yapıldığında → \`working memory\` + \`error detection\`. Description'da neyi yanlış hatırladığını belirt (renk mi, şekil mi?).
-  - **İNHİBİSYON:** Birden fazla seçenek arasından yanlış olanları bastırıp doğruyu seçme anı → \`inhibitory control\`.
-  - **ARTAN ZORLUK:** Baloncuk sayısının artması, hızın artması → \`working memory\` yükünün arttığını description'da belirt.
-- **Görsel İpuçları:** Renkli baloncuklar (kırmızı, mavi, yeşil, sarı vb.), içlerinde deniz ürünleri, sola hareket, kaybolma animasyonu, seçim arayüzü.
-- **ÖNEMLİ:** Her baloncuk belirmesini, her kaybolmayı ve her seçim anını ayrı ayrı kaydet. Baloncuk sayısı ve detayları hafıza yükünü gösterir — DETAYLARINI ATLAMA.
+  - **KODLAMA (ENCODING):** Yeni baloncuklar ekranda belirdiğinde → \`working memory\`, \`encoding\`, \`attention\` kategorisi. Description'da kaç baloncuk olduğunu, her birinin rengini ve içindeki canlı türünü tek tek listele.
+  - **HAFIZADA TUTMA (MAINTENANCE):** Baloncuklar ekranda dururken oyuncu bunları izliyorken → \`working memory\`, \`sustained attention\` kategorisi.
+  - **KAYBOLMA ANI (tekli):** Bir baloncuk ekrandan kaybolduğunda → \`working memory\`, \`memory recall\` kategorisi. Description'da "[Renk] renkli [canlı] baloncuğu kayboldu — oyuncu renk ve canlı türünü hatırlamalı" yaz.
+  - **KAYBOLMA ANI (ikili/üçlü):** 2 veya 3 baloncuk aynı anda kaybolduğunda → \`working memory\`, \`memory recall\`, \`divided attention\` kategorisi. Description'da kaç balonun kaybolduğunu ve hangilerinin olduğunu listele; hafıza yükünün arttığını belirt.
+  - **ÇEMBER SEÇIM ARAYÜZÜ AÇILDI:** Dairesel seçim çemberi ekrana geldiğinde → \`working memory\`, \`memory recall\`, \`decision making\` kategorisi. Description'da sorulan özelliğin (renk mi, canlı türü mü) ne olduğunu belirt.
+  - **RENK SEÇİMİ:** Oyuncu çemberden balon rengini seçtiğinde → \`working memory\`, \`decision making\`, \`memory recall\` kategorisi. Seçilen rengi ve doğru olup olmadığını belirt.
+  - **CANLI TÜRÜ SEÇİMİ:** Oyuncu çemberden canlı türünü seçtiğinde → \`working memory\`, \`decision making\`, \`memory recall\` kategorisi. Seçilen canlıyı ve doğru olup olmadığını belirt.
+  - **DOĞRU CEVAP:** Doğru renk ve canlı türü seçildiğinde → \`working memory\`, \`feedback\` kategorisi. Description'da doğru seçilen özellikleri belirt.
+  - **YANLIŞ CEVAP — AHTAPOT ANIMASYONU:** Yanlış seçim sonrası ahtapot canlıyı yediğinde → \`working memory\`, \`error detection\`, \`feedback\` kategorisi. Description'da neyin yanlış hatırlandığını (renk mi, canlı türü mü) ve ahtapot animasyonunu belirt.
+  - **İNHİBİSYON:** Çemberdeki yanlış seçenekleri bastırıp doğrusunu seçme anı → \`inhibitory control\` kategorisi.
+  - **ARTAN ZORLUK:** Baloncuk sayısı artarsa veya kaybolma grubu büyürse → \`working memory\` yükünün arttığını description'da belirt.
+- **Görsel İpuçları:** Renkli baloncuklar (kırmızı, mavi, yeşil, sarı vb.), içlerinde deniz canlıları, kaybolma animasyonu, dairesel çember seçim arayüzü, ahtapot ceza animasyonu, olumlu geri bildirim efekti.
+- **ÖNEMLİ:** Her baloncuk belirmesini, her kaybolmayı (tekli/ikili/üçlü ayrımıyla), her çember açılışını ve her seçim anını ayrı ayrı kaydet. İkili/üçlü kaybolmalar daha yüksek hafıza yüküdür — bunu description'da mutlaka belirt.
 
 #### 🟠 All You Can E.T. (Cognitive Flexibility — Task Switching)
 - **Kaynak:** Blume et al., 2024
-- **Oyun Tanımı:** Ekranda değişen kurallara göre yiyecek ve içecekleri tıklayarak canavarlara atma oyunu. Oyuncudan belirli bir kurala göre (örn: "sadece meyveleri at", "kırmızı yiyecekleri sola, mavi içecekleri sağa at" gibi) nesneleri doğru canavara sürüklemesi/tıklaması istenir. Seviye içinde kurallar DEĞİŞEBİLİR ve oyuncunun yeni kurala hızla adapte olması beklenir.
+- **Oyun Tanımı:** Ekranın üst bölümünde canavarlar belirerek sıraya girer. Ekranın alt bölümünde ise süt ve kek gibi yiyecek/içecek düğmeleri görünür. Oyuncu, aktif kurala göre hangi canavara hangi yiyeceğin gönderileceğine karar verir ve ilgili düğmeye tıklar. Canavarlar ekranda belirme sırasına göre sıraya girer; oyuncu bu sırayı takip ederek doğru canavar için doğru düğmeyi seçmelidir. Seviye içinde kurallar DEĞİŞEBİLİR ve oyuncunun yeni kurala hızla adapte olması beklenir.
 - **Birincil Yürütücü İşlev:** Cognitive Flexibility (Bilişsel Esneklik), Task Switching
+
+- **🔍 TEMEL MEKANİK — Her turda şu sıra işler:**
+  1. Üst bölümde yeni bir canavar belirir ve sıraya girer.
+  2. Alt bölümde süt ve kek düğmeleri görünür.
+  3. Oyuncu aktif kurala göre doğru düğmeye tıklar → yiyecek o canavara gönderilir.
+  4. Canavar kaybolur, sıradaki canavar öne gelir.
+  - ⚠️ Oyuncu canavara değil, ALT BÖLMEDEKİ yiyecek düğmesine tıklar. Tıklama olayını raporlarken hangi düğmeye (süt mi, kek mi) tıklandığını ve bunun hangi canavara gönderildiğini mutlaka belirt.
+
 - **Kritik Tespit Anları:**
-  - **KURAL SUNUMU:** Yeni kural ekranda gösterildiğinde → \`cognitive flexibility\` + \`attention\` kategorisi. Description'da kuralın ne olduğunu tam olarak yaz.
-  - **KURAL UYGULAMASI:** Oyuncu aktif kurala göre doğru nesneyi doğru canavara attığında → \`cognitive flexibility\` + \`decision making\` kategorisi.
-  - **KURAL DEĞİŞİMİ (EN KRİTİK AN):** Seviye içinde kural değiştiğinde → \`cognitive flexibility\` + \`task switching\` kategorisi. Description'da eski kuralı ve yeni kuralı karşılaştır. Bu AN çok önemlidir — ASLA ATLAMA.
-  - **ESKİ KURALA GÖRE HAREKET (PERSEVERASYON):** Kural değiştikten sonra oyuncu hâlâ eski kurala göre davranırsa → \`cognitive flexibility\` + \`error detection\` + \`inhibitory control\` kategorisi. Description'da "Kural değişmesine rağmen eski kurala göre hareket etti — perseveratif hata" yaz.
-  - **YENİ KURALA ADAPTASYON:** Kural değişiminden sonra oyuncunun ilk doğru hareketi → \`cognitive flexibility\` + \`task switching\` kategorisi. Description'da "Yeni kurala başarıyla adapte oldu" yaz.
-  - **YANLIŞ NESNE/CANAVAR SEÇİMİ:** Yanlış nesneyi veya yanlış canavara atma → \`decision making\` + \`error detection\`. Kuralın ne olduğunu ve neyin yanlış yapıldığını açıkla.
-  - **ZORLUK ARTIŞI:** Kuralların karmaşıklaşması, daha fazla nesne/canavar eklenmesi → \`cognitive flexibility\` yükünün arttığını belirt.
-- **Görsel İpuçları:** Yiyecek ve içecek görselleri, canavarlar (hedef), kural göstergesi/tabelası, sürükleme/atma animasyonu, kural değişim efekti.
-- **ÖNEMLİ:** Kural değişim anları bu oyunun EN DEĞERLİ verisidir. Her kural değişimini, değişim öncesi son hareketi ve değişim sonrası ilk hareketi MUTLAKA kaydet.
+  - **CANAVAR BELİRMESİ:** Yeni canavar ekranda belirip sıraya girdiğinde → \`object appearance\`, \`attention\`, \`sequencing\` kategorisi. Description'da canavarın görünümünü ve sıradaki konumunu belirt.
+  - **DÜĞME BELİRMESİ:** Süt veya kek düğmesi ekranda göründüğünde → \`object appearance\`, \`decision making\` kategorisi. Hangi düğmelerin mevcut olduğunu yaz.
+  - **DOĞRU DÜĞME TIKLAMA:** Oyuncu aktif kurala göre doğru düğmeye tıkladığında → \`cognitive flexibility\`, \`decision making\`, \`click/tap\` kategorisi. Description'da hangi kurala göre, hangi düğmeye tıklandığını ve hangi canavara gönderildiğini yaz.
+  - **KURAL SUNUMU:** Yeni kural ekranda gösterildiğinde → \`cognitive flexibility\` + \`attention\` kategorisi. Description'da kuralın tam içeriğini yaz (örn: "Canavarın rengi maviyse süt, sarıysa kek ver").
+  - **KURAL DEĞİŞİMİ (EN KRİTİK AN):** Seviye içinde kural değiştiğinde → \`cognitive flexibility\` + \`task switching\` + \`rule change\` kategorisi. Description'da eski kuralı ve yeni kuralı karşılaştır. Bu AN çok önemlidir — ASLA ATLAMA.
+  - **ESKİ KURALA GÖRE YANLIŞ TIKLAMA (PERSEVERASYON):** Kural değiştikten sonra oyuncu hâlâ eski kurala göre düğmeye tıklarsa → \`cognitive flexibility\` + \`perseveration\` + \`inhibitory control\` + \`error detection\` kategorisi. Description'da "Kural değişmesine rağmen eski kurala göre [süt/kek] düğmesine tıklandı — perseveratif hata" yaz.
+  - **YENİ KURALA ADAPTASYON:** Kural değişiminden sonra oyuncunun ilk doğru düğme tıklaması → \`cognitive flexibility\` + \`adaptation\` + \`task switching\` kategorisi. Description'da "Yeni kurala başarıyla adapte oldu" yaz.
+  - **YANLIŞ DÜĞME SEÇİMİ:** Kurala uymayan düğmeye tıklama → \`decision making\` + \`error detection\`. Aktif kuralı, hangi düğmeye tıklandığını ve doğrusunun ne olduğunu açıkla.
+  - **SIRA TAKİBİ HATASI:** Sıradaki canavara değil yanlış canavara yiyecek gönderilirse → \`sequencing\` + \`error detection\` kategorisi.
+  - **ZORLUK ARTIŞI:** Sıradaki canavar sayısının artması veya kuralların karmaşıklaşması → \`cognitive flexibility\` yükünün arttığını description'da belirt.
+- **Görsel İpuçları:** Üst bölümde sıralanmış canavarlar; alt bölümde süt ve kek düğmeleri; kural göstergesi/tabelası; tıklama sonrası yiyeceğin canavara gitme animasyonu; kural değişim efekti; hata göstergesi (kırmızı X veya negatif puan).
+- **ÖNEMLİ:** Kural değişim anları bu oyunun EN DEĞERLİ verisidir. Her kural değişimini, değişim öncesi son düğme tıklamasını ve değişim sonrası ilk düğme tıklamasını MUTLAKA kaydet.
 
 ### 5.3 Genel Oyun Tespit Kuralları
 - Eğer video yukarıdaki oyunlardan birine benziyorsa, o oyunun özel tespit kurallarını MUTLAKA uygula.
