@@ -290,14 +290,14 @@ main {
     border-radius: 8px;
   }
   
-  .videoCaptionsPanel {
-    max-height: 120px;
-    padding: 8px 10px;
+  .videoCaptionsContainer {
+    bottom: 88px;
+    padding-inline: 12px;
   }
   
   .videoCaption {
-    font-size: 12px;
-    padding: 7px 9px;
+    font-size: 18px;
+    -webkit-text-stroke: 1px #000;
   }
   
   .videoControls {
@@ -616,15 +616,14 @@ main {
     max-height: 50vh;
   }
   
-  .videoCaptionsPanel {
-    max-height: 100px;
-    min-height: 48px;
-    padding: 6px 8px;
+  .videoCaptionsContainer {
+    bottom: 76px;
+    padding-inline: 10px;
   }
   
   .videoCaption {
-    font-size: 11px;
-    padding: 6px 8px;
+    font-size: 15px;
+    -webkit-text-stroke: 0.9px #000;
   }
   
   .videoControls button {
@@ -860,6 +859,7 @@ video {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 .emptyVideo {
@@ -877,39 +877,43 @@ video {
 }
 
 .videoCaptionsContainer {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  translate: -50% 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 100%;
-}
-
-.videoCaptionsPanel {
-  background: color-mix(in srgb, var(--highlight) 85%, #000 15%);
-  border-top: 1px solid var(--border);
-  padding: 10px 12px;
-  min-height: 56px;
-  max-height: 140px;
-  overflow-y: auto;
-}
-
-.videoCaptionsPlaceholder {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.4;
+  align-items: center;
+  pointer-events: none;
+  z-index: 50;
+  padding-inline: 16px;
 }
 
 .videoCaption {
-  background: color-mix(in srgb, var(--background-solid) 84%, #000 16%);
-  border: 1px solid var(--border);
-  color: var(--text);
-  text-align: left;
+  background: transparent;
+  border: none;
+  color: #ffd400;
+  text-align: center;
   white-space: pre-wrap;
   word-break: break-word;
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 700;
   line-height: 1.45;
-  width: 100%;
-  border-radius: 8px;
+  width: fit-content;
+  max-width: min(92%, 960px);
+  /*-webkit-text-stroke: 1.25px #000;*/
+  text-shadow:
+    2px 2px 0 #000,
+    -2px 2px 0 #000,
+    2px -2px 0 #000,
+    -2px -2px 0 #000,
+    0 2px 0 #000,
+    2px 0 0 #000,
+    0 -2px 0 #000,
+    -2px 0 0 #000;
 }
 
 .videoControls {

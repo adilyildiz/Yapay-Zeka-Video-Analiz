@@ -273,17 +273,13 @@ export default function VideoPlayer({
               onPlay={onPlay}
               onPause={onPause}
             />
-          </div>
 
-          <div className="videoCaptionsPanel" aria-live="polite" aria-atomic="true">
-            {currentCaptions.length > 0 ? (
-              <div className="videoCaptionsContainer">
+            {currentCaptions.length > 0 && (
+              <div className="videoCaptionsContainer" aria-live="polite" aria-atomic="true">
                 {currentCaptions.map((caption, i) => (
                   <div key={i} className="videoCaption">{caption}</div>
                 ))}
               </div>
-            ) : (
-              <div className="videoCaptionsPlaceholder">Bu anda aktif transkript yok</div>
             )}
           </div>
 
