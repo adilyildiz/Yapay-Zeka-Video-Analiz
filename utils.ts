@@ -114,14 +114,22 @@ async function getFFmpeg(): Promise<FFmpeg> {
   return ffmpegLoading;
 }
 
+export type SliceVideoOptions = {
+  fps?: number | null;
+  height?: number | null;
+};
+
 /**
- * FFmpeg.wasm ile video dosyasını belirli zaman aralığında keser.
- * -c copy ile re-encode yapmadan keser — neredeyse anında.
+ * FFmpeg.wasm ile videoyu belirli aralıkta keser ve istenirse optimize eder.
+ * - fps verilirse kare sayısı düşürülür
+ * - height verilirse yükseklik azaltılır (oran korunur)
+ * - ikisi de kapalıysa hızlı kesim için stream copy kullanılır
  */
 export async function sliceVideo(
   file: globalThis.File,
   startSecs: number,
   endSecs: number,
+  options: SliceVideoOptions = {},
 ): Promise<globalThis.File> {
   const ffmpeg = await getFFmpeg();
 
@@ -132,24 +140,51 @@ export async function sliceVideo(
   await ffmpeg.writeFile(inputName, await fetchFile(file));
 
   const duration = endSecs - startSecs;
+  const fps = options.fps && options.fps > 0 ? Math.floor(options.fps) : null;
+  const height = options.height && options.height > 0 ? Math.floor(options.height) : null;
 
-  // -c copy: re-encode yapmadan keser (çok hızlı)
-  await ffmpeg.exec([
-    '-ss', startSecs.toString(),
-    '-i', inputName,
-    '-t', duration.toString(),
-    '-c', 'copy',
-    '-avoid_negative_ts', 'make_zero',
-    outputName,
-  ]);
+  if (!fps && !height) {
+    await ffmpeg.exec([
+      '-ss', startSecs.toString(),
+      '-i', inputName,
+      '-t', duration.toString(),
+      '-c', 'copy',
+      '-avoid_negative_ts', 'make_zero',
+      outputName,
+    ]);
+  } else {
+    const filters: string[] = [];
+
+    if (fps) {
+      filters.push(`fps=${fps}`);
+    }
+
+    if (height) {
+      filters.push(`scale=-1:${height}:force_original_aspect_ratio=decrease`);
+    }
+
+    const command = [
+      '-ss', startSecs.toString(),
+      '-i', inputName,
+      '-t', duration.toString(),
+      '-vf', filters.join(','),
+    ];
+
+    if (fps) {
+      command.push('-r', fps.toString());
+    }
+
+    command.push('-avoid_negative_ts', 'make_zero', outputName);
+    await ffmpeg.exec(command);
+  }
 
   // Çıktıyı oku
-  const data = await ffmpeg.readFile(outputName);
+  const data = await ffmpeg.readFile(outputName) as Uint8Array;
 
   // Temizlik
   await ffmpeg.deleteFile(inputName);
   await ffmpeg.deleteFile(outputName);
 
-  const blob = new Blob([data], { type: 'video/mp4' });
+  const blob = new Blob([new Uint8Array(data)], { type: 'video/mp4' });
   return new File([blob], outputName, { type: 'video/mp4' });
 }

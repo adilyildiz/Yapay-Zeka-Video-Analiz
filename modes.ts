@@ -69,7 +69,7 @@ const modes: Record<string, Mode> = {
 
 ### 5. Oyun-Spesifik Bağlam
 Bu videolarda şu oyunlardan biri oynuyor olabilir. Eğer tanırsan, o oyuna özel detaylara dikkat et:
-- **Gwakkamole (Go/No-Go):** Avokado şekilli canavarlar. KASKLI/MİĞFERLİ avokado = No-Go hedefi (VURMA!), KASKSIZ avokado = Go hedefi (VUR!). Her avokadoyu tespit ettiğinde ÖNCE baş bölgesini incele: başın üstünde **GRİ renkli ve DİKENLİ/ÇİVİLİ** metalik bir miğfer varsa → KESİNLİKLE KASKLIYDIR (No-Go). Başın silueti gövdeyle aynı renk (yeşil) ve düzgün yuvarlaksa → kasksızdır (Go). Şüphe durumunda o avokadoyu raporlama. ÖNEMLİ: Kasklı avokado ekranda belirdiğinde bu bir inhibisyon anıdır. Oyuncunun tıklamaması (başarılı inhibisyon) veya tıklaması (başarısız inhibisyon) en kritik verilerdir — MUTLAKA kaydet.
+- **Gwakkamole (Go/No-Go):** Avokado şekilli canavarlar. KASKLI/MİĞFERLİ avokado = No-Go hedefi (VURMA!), KASKSIZ avokado = Go hedefi (VUR!). Her avokadoyu tespit ettiğinde ÖNCE baş bölgesini incele: başın üstünde **GRİ renkli ve DİKENLİ/ÇİVİLİ** metalik bir miğfer varsa → KESİNLİKLE KASKLIYDIR (No-Go). Başın silueti gövdeyle aynı renk (yeşil) ve düzgün yuvarlaksa → kasksızdır (Go). Şüphe durumunda o avokadoyu raporlama. GO tıklaması genelde üstten inen **sarı yumruk/ezme** animasyonuyla görünür. No-Go failure anında ise kasklı avokadoya inen bu yumruk **kırmızıya döner** ve **titreme/sarsılma** ile hatayı gösterir. ÖNEMLİ: Kasklı avokado ekranda belirdiğinde bu bir inhibisyon anıdır. Oyuncunun tıklamaması (başarılı inhibisyon) veya tıklaması (başarısız inhibisyon) en kritik verilerdir — MUTLAKA kaydet.
 - **Crush Stations (Working Memory):** Renkli baloncuklar içinde deniz canlıları geliyor. Baloncuklar sırayla ekrandan kayboluyor (bazen 2'li veya 3'lü gruplar hâlinde). Her kaybolmadan sonra oyuncuya açılan çemberden (seçim arayüzü) kaybolan balonun rengi ve içindeki canlı türü soruluyor. Yanlış seçimde ahtapot deniz canlısını yiyor. Her baloncuk belirme, kaybolma ve seçim anını ayrı ayrı raporla.
 - **All You Can E.T. (Task Switching):** Ekranın alt kısmında süt ve kek gibi yiyecek/içecek düğmeleri beliriyor; oyuncu aktif kurala göre doğru düğmeye tıklayarak ilgili canavara gönderiyor. Canavarlar ekranda belirme sırasına göre sıraya giriyor; oyuncu sırayı takip ederek doğru canavar için doğru düğmeyi seçmeli. Seviye içinde kurallar değişebilir. Kural değişim anları, eski kurala göre hatalı tıklamalar ve yeni kurala adaptasyon EN ÖNEMLİ anlardır — ATLAMA.`,
     isList: true,
@@ -129,9 +129,9 @@ Aşağıdaki görsel olayları tespit ettiğinde, belirtilen kategorileri MUTLAK
 |---|---|
 | Kasklı/korumalı avokado belirdi (No-Go hedefi) | \`inhibitory control\`, \`no-go response\`, \`object appearance\` |
 | Kasklı avokado belirdi ve oyuncu TIKLAMADI | \`inhibitory control\`, \`inhibition success\`, \`no-go response\` |
-| Kasklı avokado belirdi ve oyuncu TIKLADI (hata) | \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` |
+| Kasklı avokado belirdi ve oyuncu TIKLADI (hata; sarı yumruk kırmızıya dönüp titrer) | \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` |
 | Kasksız/normal avokado belirdi (Go hedefi) | \`go response\`, \`object appearance\` |
-| Normal avokadoya tıklandı | \`go response\`, \`click/tap\`, \`action points\` |
+| Normal avokadoya tıklandı (üstten sarı yumruk ezme animasyonu) | \`go response\`, \`click/tap\`, \`action points\` |
 | Ekranda hem kasklı hem kasksız avokado var | \`inhibitory control\`, \`selective attention\`, \`decision making\` |
 
 **Crush Stations (renkli baloncuklar + deniz canlıları görüyorsan):**
@@ -205,10 +205,10 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
 - **❌ EN KRİTİK HATA:** Kasklı (gri dikenli) bir avokadoyu "kasksız" olarak sınıflandırmak. Bu hata, tüm inhibisyon verisini bozar.
 - **Kritik Tespit Anları:**
   - **İNHİBİSYON BAŞARISI:** Kasklı avokado (No-Go hedefi) ekranda belirip oyuncu TIKLAMADAN beklediğinde → \`inhibitory control\`, \`inhibition success\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokado belirdi, oyuncu tıklamaktan başarıyla kaçındı" yaz.
-  - **İNHİBİSYON BAŞARISIZLIĞI:** Kasklı avokadoya tıklanırsa (kırmızı çarpı veya çekiç vuruşu görülürse) → \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokadoya tıklandı — inhibisyon hatası" yaz.
-  - **GO TEPKİSİ:** Kasksız avokadoya (Go hedefine) doğru şekilde tıklama → \`go response\`, \`click/tap\`, \`action points\` kategorisi.
-  - **KAÇIRILAN GO HEDEFİ:** Kasksız avokado ekranda belirip tıklanmadan kaybolursa → \`attention\` + \`processing speed\` kategorisi.
-- **Görsel İpuçları:** Yeşil gövde; No-Go = gri dikenli kask, Go = kasksız/yeşil baş. Tokmak/çekiç animasyonu tıklamayı gösterir.
+  - **İNHİBİSYON BAŞARISIZLIĞI:** Kasklı avokadoya tıklanırsa ve üstten inen sarı yumruk **kırmızıya dönüp titreyen/sarsılan** bir vuruşa dönüşürse → \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokadoya kırmızı/titreyen yumruk indi — inhibisyon hatası" yaz.
+  - **GO TEPKİSİ:** Kasksız avokadoya (Go hedefine) doğru şekilde tıklama, genelde üstten inen **sarı yumruk ile ezme animasyonu** olarak görünür → \`go response\`, \`click/tap\`, \`action points\` kategorisi.
+  - **KAÇIRILAN GO HEDEFİ:** Kasksız avokado ekranda belirip tıklanmadan kaybolursa → \`attention\`, \`processing speed\`, \`go failure\` kategorisi.
+- **Görsel İpuçları:** Yeşil gövde; No-Go = gri dikenli kask, Go = kasksız/yeşil baş. Go tıklaması = üstten inen sarı yumrukla ezme animasyonu; No-Go failure = kasklı hedefe inen yumruğun kırmızıya dönmesi ve titremesi/sarsılması.
 
 #### 🔵 Crush Stations (Working Memory)
 - **Kaynak:** NYU CREATE
@@ -319,7 +319,7 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
 Tüm analiz sonuçları Türkçe olmalıdır.`,
     isList: true,
     subModes: {
-      'Oyun Mekanikleri Kategorileri': 'fun, challenge, behavioural momentum, rewards, penalties, pavlovian interaction, urgent optimism, communal discovery, strategy/planning, story, cooperation, pareto optimal, feedback, protege effect, mini games, design/editing, realism, ownership, role play, virality, cascading information, collaboration, competition, cut scenes, action points, levels, tokens, question&answer, game turns, selecting/collecting, resource management, capture/eliminate, feedback, goods/information, time pressure, tutorial, tiles/grids, infinite gameplay, appointment, movement, assessment, status, simulate, response, click/tap, object appearance, object disappearance, score change, level completion, failure, progression, social interaction, exploration, customization, screen change, working memory, inhibitory control, cognitive flexibility, attention, pattern recognition, spatial reasoning, problem solving, decision making, logical thinking, sequencing, mental rotation, visual processing, auditory processing, memory recall, divided attention, selective attention, sustained attention, processing speed, executive function, metacognition, task switching, planning ahead, error detection, self-correction, go response, no-go response, go-success, no-go failure, inhibition success, inhibition failure, encoding, maintenance, rule change, perseveration, adaptation, difficulty increase',
+      'Oyun Mekanikleri Kategorileri': 'fun, challenge, behavioural momentum, rewards, penalties, pavlovian interaction, urgent optimism, communal discovery, strategy/planning, story, cooperation, pareto optimal, feedback, protege effect, mini games, design/editing, realism, ownership, role play, virality, cascading information, collaboration, competition, cut scenes, action points, levels, tokens, question&answer, game turns, selecting/collecting, resource management, capture/eliminate, feedback, goods/information, time pressure, tutorial, tiles/grids, infinite gameplay, appointment, movement, assessment, status, simulate, response, click/tap, object appearance, object disappearance, score change, level completion, failure, progression, social interaction, exploration, customization, screen change, working memory, inhibitory control, cognitive flexibility, attention, pattern recognition, spatial reasoning, problem solving, decision making, logical thinking, sequencing, mental rotation, visual processing, auditory processing, memory recall, divided attention, selective attention, sustained attention, processing speed, executive function, metacognition, task switching, planning ahead, error detection, self-correction, go response, no-go response, go-success, go-failure, no-go failure, inhibition success, inhibition failure, encoding, maintenance, rule change, perseveration, adaptation, difficulty increase',
       'Özel': '',
     },
   },

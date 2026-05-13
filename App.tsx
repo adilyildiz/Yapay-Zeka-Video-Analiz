@@ -23,11 +23,14 @@ import {generateContent, uploadFile, type UploadedFile, APIConfig, APIProvider, 
 import APISettings from './APISettings';
 import Chart from './Chart.jsx';
 import functions from './functions';
-import {sliceVideo} from './utils';
+import {sliceVideo, type SliceVideoOptions} from './utils';
 import * as XLSX from 'xlsx';
 import modes from './modes';
 import {generateSrt, timeToSecs} from './utils';
 import VideoPlayer from './VideoPlayer.jsx';
+
+const formatFileSizeInMB = (bytes: number): string =>
+  `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 
 // SRT dosyasını parse eden fonksiyon
 function parseSrtFile(content: string): any[] {
@@ -177,7 +180,9 @@ function saveModePreferences(
   mode: string, customPrompt: string, chartMode: string, chartPrompt: string,
   categoricalMode: string, categoricalPrompt: string,
   chunkDuration: number | 'all', ollamaSendMode: 'frame' | 'video',
-  initialScanContextMode: 'contextual' | 'independent'
+  initialScanContextMode: 'contextual' | 'independent',
+  sliceVideoFpsEnabled: boolean, sliceVideoFps: number,
+  sliceVideoResizeEnabled: boolean, sliceVideoHeight: number,
 ) {
   const preferences = {
     selectedMode: mode,
@@ -189,6 +194,10 @@ function saveModePreferences(
     chunkDuration,
     ollamaSendMode,
     initialScanContextMode,
+    sliceVideoFpsEnabled,
+    sliceVideoFps,
+    sliceVideoResizeEnabled,
+    sliceVideoHeight,
   };
   localStorage.setItem('modePreferences', JSON.stringify(preferences));
 }
@@ -264,6 +273,10 @@ export default function App() {
   const [currentAPIConfig, setCurrentAPIConfig] = useState<APIConfig>(getCurrentConfig());
   const [currentProvider, setCurrentProvider] = useState<string>('Google Gemini');
   const [chunkDuration, setChunkDuration] = useState<number | 'all'>(savedPreferences?.chunkDuration ?? 60);
+  const [sliceVideoFpsEnabled, setSliceVideoFpsEnabled] = useState<boolean>(savedPreferences?.sliceVideoFpsEnabled ?? true);
+  const [sliceVideoFps, setSliceVideoFps] = useState<number>(savedPreferences?.sliceVideoFps ?? 4);
+  const [sliceVideoResizeEnabled, setSliceVideoResizeEnabled] = useState<boolean>(savedPreferences?.sliceVideoResizeEnabled ?? true);
+  const [sliceVideoHeight, setSliceVideoHeight] = useState<number>(savedPreferences?.sliceVideoHeight ?? 480);
   const [initialScanContextMode, setInitialScanContextMode] = useState<'contextual' | 'independent'>(
     savedPreferences?.initialScanContextMode || 'contextual',
   );
@@ -300,6 +313,10 @@ export default function App() {
   const isCustomChartMode = isChartMode && chartMode === 'Özel';
   const isCustomCategoricalMode = isCategoricalMode && categoricalMode === 'Özel';
   const hasSubMode = isCustomMode || isChartMode || isCategoricalMode;
+  const sliceVideoOptions: SliceVideoOptions = {
+    fps: sliceVideoFpsEnabled ? Math.max(1, Math.floor(sliceVideoFps || 4)) : null,
+    height: sliceVideoResizeEnabled ? Math.max(1, Math.floor(sliceVideoHeight || 480)) : null,
+  };
   
   const handleAPIConfigChange = (config: APIConfig) => {
     setCurrentAPIConfig(config);
@@ -364,6 +381,10 @@ export default function App() {
       chunkDuration,
       ollamaSendMode,
       initialScanContextMode,
+      sliceVideoFpsEnabled,
+      sliceVideoFps,
+      sliceVideoResizeEnabled,
+      sliceVideoHeight,
     );
   }, [
     selectedMode,
@@ -375,6 +396,10 @@ export default function App() {
     chunkDuration,
     ollamaSendMode,
     initialScanContextMode,
+    sliceVideoFpsEnabled,
+    sliceVideoFps,
+    sliceVideoResizeEnabled,
+    sliceVideoHeight,
   ]);
 
   // İlk yüklemede submode gerektiren mod varsa, direkt submode ekranına geç
@@ -595,6 +620,9 @@ export default function App() {
     setFileName(fileToUpload.name);
     setIsLoadingVideo(true);
     setVidUrl(URL.createObjectURL(fileToUpload));
+    console.log(
+      `Yüklenen dosya boyutu: ${formatFileSizeInMB(fileToUpload.size)} (${fileToUpload.size} bytes)`
+    );
     
     // Orijinal dosyayı sakla — Gemini'ye yükleme analiz aşamasında yapılacak
     fileRef.current = fileToUpload;
@@ -870,9 +898,9 @@ ${basePrompt}
                   setAnalysisProgress(
                     `Parça ${i + 1}/${numChunks} kesiliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
                   );
-                  const sliced = await sliceVideo(originalFile, startTime, endTime);
+                  const sliced = await sliceVideo(originalFile, startTime, endTime, sliceVideoOptions);
                   if (cancelAnalysisRef.current) break;
-                  console.log(`Video chunk ${i + 1} kesildi: ${sliced.size} bytes`);
+                  console.log(`Video chunk ${i + 1} kesildi: ${formatFileSizeInMB(sliced.size)} (${sliced.size} bytes)`);
                   setAnalysisProgress(
                     `Parça ${i + 1}/${numChunks} yükleniyor...`
                   );
@@ -896,12 +924,12 @@ ${basePrompt}
                     setAnalysisProgress(
                       `Parça ${i + 1}/${numChunks} video kesiliyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
                     );
-                    const sliced = await sliceVideo(originalFile, startTime, endTime);
+                    const sliced = await sliceVideo(originalFile, startTime, endTime, sliceVideoOptions);
                     if (cancelAnalysisRef.current) break;
                     const { prepareOllamaVideoSegment } = await import('./api');
                     chunkFile = await prepareOllamaVideoSegment(sliced);
                     useChunkLocalTime = true;
-                    console.log(`Video segment prepared for Ollama chunk ${i + 1}: ${sliced.size} bytes`);
+                    console.log(`Video segment prepared for Ollama chunk ${i + 1}: ${formatFileSizeInMB(sliced.size)} (${sliced.size} bytes)`);
                   } catch (videoError) {
                     console.warn('Video segment preparation failed, falling back to frame:', videoError);
                     // Fallback: frame extraction
@@ -935,12 +963,12 @@ ${basePrompt}
                     setAnalysisProgress(
                       `Parça ${i + 1}/${numChunks} çoklu kare çıkarılıyor... (${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)})`
                     );
-                    const sliced = await sliceVideo(originalFile, startTime, endTime);
+                    const sliced = await sliceVideo(originalFile, startTime, endTime, sliceVideoOptions);
                     if (cancelAnalysisRef.current) break;
                     const { prepareOpenAIVideoSegment } = await import('./api');
                     chunkFile = await prepareOpenAIVideoSegment(sliced);
                     useChunkLocalTime = true;
-                    console.log(`Multi-frame prepared for OpenAI chunk ${i + 1}`);
+                    console.log(`Multi-frame prepared for OpenAI chunk ${i + 1}: ${formatFileSizeInMB(sliced.size)} (${sliced.size} bytes)`);
                   } catch (videoError) {
                     console.warn('Multi-frame preparation failed, falling back to single frame:', videoError);
                     const midTime = (startTime + endTime) / 2;
@@ -1300,9 +1328,9 @@ ${basePrompt}
               setAnalysisProgress(
                 `Parça ${i + 1}/${numChunks} kesiliyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
               );
-              const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+              const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd, sliceVideoOptions);
               if (cancelAnalysisRef.current) break;
-              console.log(`Reanalysis chunk ${i + 1} kesildi: ${sliced.size} bytes`);
+              console.log(`Reanalysis chunk ${i + 1} kesildi: ${formatFileSizeInMB(sliced.size)} (${sliced.size} bytes)`);
               setAnalysisProgress(
                 `Parça ${i + 1}/${numChunks} yükleniyor...`
               );
@@ -1324,12 +1352,12 @@ ${basePrompt}
                 setAnalysisProgress(
                   `Parça ${i + 1}/${numChunks} video kesiliyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
                 );
-                const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+                const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd, sliceVideoOptions);
                 if (cancelAnalysisRef.current) break;
                 const { prepareOllamaVideoSegment } = await import('./api');
                 chunkFile = await prepareOllamaVideoSegment(sliced);
                 useChunkLocalTime = true;
-                console.log(`Video segment prepared for Ollama reanalysis chunk ${i + 1}: ${sliced.size} bytes`);
+                console.log(`Video segment prepared for Ollama reanalysis chunk ${i + 1}: ${formatFileSizeInMB(sliced.size)} (${sliced.size} bytes)`);
               } catch (videoError) {
                 console.warn('Video segment preparation failed for reanalysis, falling back to frame:', videoError);
                 const midTime = (chunkStart + chunkEnd) / 2;
@@ -1362,11 +1390,12 @@ ${basePrompt}
                 setAnalysisProgress(
                   `Parça ${i + 1}/${numChunks} çoklu kare çıkarılıyor... (${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)})`
                 );
-                const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd);
+                const sliced = await sliceVideo(originalFile, chunkStart, chunkEnd, sliceVideoOptions);
                 if (cancelAnalysisRef.current) break;
                 const { prepareOpenAIVideoSegment } = await import('./api');
                 chunkFile = await prepareOpenAIVideoSegment(sliced);
                 useChunkLocalTime = true;
+                console.log(`Multi-frame prepared for OpenAI reanalysis chunk ${i + 1}: ${formatFileSizeInMB(sliced.size)} (${sliced.size} bytes)`);
               } catch (videoError) {
                 console.warn('Multi-frame preparation failed for reanalysis:', videoError);
                 const midTime = (chunkStart + chunkEnd) / 2;
@@ -1646,6 +1675,10 @@ ${basePrompt}
     setCategoricalPrompt(saved?.categoricalPrompt || '');
     setCategoricalMode(saved?.categoricalMode || categoricalModes[0]);
     setChunkDuration(saved?.chunkDuration ?? 60);
+    setSliceVideoFpsEnabled(saved?.sliceVideoFpsEnabled ?? true);
+    setSliceVideoFps(saved?.sliceVideoFps ?? 4);
+    setSliceVideoResizeEnabled(saved?.sliceVideoResizeEnabled ?? true);
+    setSliceVideoHeight(saved?.sliceVideoHeight ?? 480);
     setOllamaSendMode(saved?.ollamaSendMode || 'frame');
     setInitialScanContextMode(saved?.initialScanContextMode || 'contextual');
 
@@ -1850,6 +1883,68 @@ ${basePrompt}
           {/* Chunk Duration Seçici */}
           <div className="chunk-duration-section">
             <h2>Video İşleme Ayarları</h2>
+            <div className="setting-group">
+              <label className="setting-label">
+                <span className="icon">movie_edit</span>
+                Video Parça İşleme Ayarları
+              </label>
+              <p className="setting-description">
+                Parçalama sırasında uygulanacak FPS ve yükseklik değerlerini buradan değiştirebilirsiniz. Her iki seçenek kapatılırsa hızlı kesim için `-c copy` kullanılır.
+              </p>
+              <div className="time-inputs">
+                <div className="time-input-group">
+                  <label style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <input
+                      type="checkbox"
+                      checked={sliceVideoFpsEnabled}
+                      onChange={(e) => setSliceVideoFpsEnabled(e.target.checked)}
+                    />
+                    FPS düşürme
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={sliceVideoFps}
+                    disabled={!sliceVideoFpsEnabled}
+                    onChange={(e) => setSliceVideoFps(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                  <small>Varsayılan: 4 FPS</small>
+                </div>
+                <div className="time-input-group">
+                  <label style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <input
+                      type="checkbox"
+                      checked={sliceVideoResizeEnabled}
+                      onChange={(e) => setSliceVideoResizeEnabled(e.target.checked)}
+                    />
+                    Boyutlandırma
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={sliceVideoHeight}
+                    disabled={!sliceVideoResizeEnabled}
+                    onChange={(e) => setSliceVideoHeight(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                  <small>Varsayılan: 480p yükseklik</small>
+                </div>
+              </div>
+              <div className="chunk-info">
+                {!sliceVideoFpsEnabled && !sliceVideoResizeEnabled ? (
+                  <p>⚡ FPS ve boyutlandırma kapalı. Parçalar `-c copy` ile hızlı şekilde kopyalanacak.</p>
+                ) : (
+                  <p>
+                    🎛️ Aktif ayarlar:
+                    {sliceVideoFpsEnabled ? ` ${Math.max(1, Math.floor(sliceVideoFps || 4))} FPS` : ' FPS korunur'}
+                    {' · '}
+                    {sliceVideoResizeEnabled ? `${Math.max(1, Math.floor(sliceVideoHeight || 480))}p yükseklik` : ' orijinal çözünürlük'}
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="setting-group">
               <label className="setting-label">
                 <span className="icon">schedule</span>
