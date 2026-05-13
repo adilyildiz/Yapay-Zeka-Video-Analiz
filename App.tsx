@@ -145,6 +145,38 @@ function formatTranscriptText(categoryInput: string, descriptionInput: string): 
   return category ? `[${category}]: ${description}` : description;
 }
 
+function highlightTranscriptText(text: string): React.ReactNode {
+  if (!text) return text;
+  
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = /(error|failure|no-go)/gi;
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    
+    const keyword = match[0].toLowerCase();
+    const color = keyword === 'no-go' ? '#0066ff' : '#ff4444';
+    
+    parts.push(
+      <span key={`${match.index}-${match[0]}`} style={{color, fontWeight: 'bold'}}>
+        {match[0]}
+      </span>
+    );
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : text;
+}
+
 function parseCategoryInput(categoryInput: string): string | string[] | undefined {
   const categories = categoryInput
     .split(',')
@@ -2464,7 +2496,7 @@ ${basePrompt}
                             })}>
                             <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}><time>{startTime || time}</time></td>
                             <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}><time>{endTime || '-'}</time></td>
-                            <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>{text}</td>
+                            <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>{highlightTranscriptText(text)}</td>
                             <td role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>{objects?.join(', ')}</td>
                             <td className="actions-cell">
                               <div className="row-action-buttons">
@@ -2510,7 +2542,7 @@ ${basePrompt}
                             })}>
                             <button onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>
                               <time>{displayTime}</time>
-                              <p className="text">{text}</p>
+                              <p className="text">{highlightTranscriptText(text)}</p>
                             </button>
                             <div className="row-action-buttons">
                               <button
@@ -2552,7 +2584,7 @@ ${basePrompt}
                             })}>
                             <span role="button" onClick={() => handleTranscriptSeek(timeToSecs(startTime || time))}>
                               <time>{displayTime}</time>
-                              <span>{text}</span>
+                              <span>{highlightTranscriptText(text)}</span>
                             </span>
                             <span className="row-action-buttons">
                               <button

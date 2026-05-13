@@ -27,6 +27,38 @@ const formatTime = (t: number) =>
     .toString()
     .padStart(2, '0')}`;
 
+const highlightTranscriptText = (text: string): React.ReactNode => {
+  if (!text) return text;
+  
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = /(error|failure|no-go)/gi;
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    
+    const keyword = match[0].toLowerCase();
+    const color = keyword === 'no-go' ? '#0066ff' : '#ff4444';
+    
+    parts.push(
+      <span key={`${match.index}-${match[0]}`} style={{color, fontWeight: 'bold'}}>
+        {match[0]}
+      </span>
+    );
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : text;
+};
+
 interface Timecode {
   time: string;
   text?: string;
@@ -277,7 +309,7 @@ export default function VideoPlayer({
             {currentCaptions.length > 0 && (
               <div className="videoCaptionsContainer" aria-live="polite" aria-atomic="true">
                 {currentCaptions.map((caption, i) => (
-                  <div key={i} className="videoCaption">{caption}</div>
+                  <div key={i} className="videoCaption">{highlightTranscriptText(caption)}</div>
                 ))}
               </div>
             )}
@@ -387,7 +419,7 @@ export default function VideoPlayer({
                     <div
                       className={c('timecodeMarkerLabel', {right: startPct > 50})}>
                       <div>{endTime ? `${start} - ${endTime}` : time}</div>
-                      <p>{value?.toString() || text}</p>
+                      <p>{highlightTranscriptText(value?.toString() || text || '')}</p>
                     </div>
                   </div>
                 );
