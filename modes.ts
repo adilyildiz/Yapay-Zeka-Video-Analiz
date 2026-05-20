@@ -86,8 +86,9 @@ Bu videolarda şu oyunlardan biri oynuyor olabilir. Eğer tanırsan, o oyuna öz
 - Ardışık olaylar arasında mantıklı zaman artışı olmalıdır — birden saniyeler atlama veya aynı zaman damgasını tekrarlama.
 - Video içeriğindeki sayaçları, süre göstergelerini veya zamanlayıcıları video zamanı olarak KULLANMA — bunlar içerik zamanıdır, video zamanı değil.
 
-### 🚀 İLK KAYIT ZORUNLULUĞU (VİDEO BAŞLANGICI)
-- Analiz edeceğin videonun ilk transkript kaydı (ilk olay) MUTLAKA videoda oynatılan oyunun adı olmalıdır.
+### 🚀 İLK KAYIT ZORUNLULUĞU (SADECE VİDEONUN GERÇEK EN BAŞLANGICI [0. SANİYE] İÇİN GEÇERLİDİR)
+- **ÖNEMLİ:** Bu kural YALNIZCA ve SADECE analiz edilen video parçası, tüm videonun en başlangıcını (gerçek videonun 0. saniyesini) içeriyorsa geçerlidir. Eğer analiz ettiğin video aralığı 0. saniyeden başlamıyorsa (yani videonun ortasından kesilmiş bir parça ise) **BU KURALI KESİNLİKLE UYGULAMA, ES GEÇ**.
+- Eğer analiz ettiğin aralık gerçek videonun 0. saniyesini içeriyorsa, oluşturacağın ilk transkript kaydı (ilk olay) MUTLAKA videoda oynatılan oyunun adı olmalıdır.
 - Bu ilk kaydı şu şekilde oluştur ve \`set_categorical_timecodes\` fonksiyonuna gönder:
   - **startTime:** "00:00:00.0"
   - **endTime:** "00:00:01.0"

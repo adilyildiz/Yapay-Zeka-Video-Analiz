@@ -331,6 +331,15 @@ export default function App() {
   const [editLocation, setEditLocation] = useState<string>('');
   const [activeTranscriptIndex, setActiveTranscriptIndex] = useState<number>(-1);
 
+  // Manuel transkript ekleme ve zaman takibi durumları
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState<number>(0);
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [addStartTime, setAddStartTime] = useState<string>('');
+  const [addEndTime, setAddEndTime] = useState<string>('');
+  const [addCategory, setAddCategory] = useState<string>('');
+  const [addDescription, setAddDescription] = useState<string>('');
+  const [addLocation, setAddLocation] = useState<string>('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<globalThis.File | null>(null);
@@ -497,6 +506,7 @@ export default function App() {
   }, [editingIndex]);
 
   const handleCurrentTimeChange = (seconds: number) => {
+    setCurrentPlaybackTime(seconds);
     const nextIndex = findActiveTranscriptIndex(timecodeList, seconds);
     setActiveTranscriptIndex((prev) => (prev === nextIndex ? prev : nextIndex));
   };
@@ -887,6 +897,14 @@ ${previousChunkSummary}
 
         // Mode-specific optimizations
         let chunkPrompt: string;
+        const firstRecordRuleInstruction = selectedMode === 'Kategorik Süreç Transkripti' ? (startTime === 0 ? `
+### 🚀 İLK KAYIT ZORUNLULUĞU (AKTİF)
+- Analiz ettiğin bu video parçası videonun en başlangıcını (0. saniyesini) içerdiği için: Oluşturacağın ilk transkript kaydı (ilk olay) MUTLAKA videoda oynatılan oyunun adı olmalıdır. Bu kaydı "00:00:00.0" - "00:00:01.0" aralığında "game name" kategorisiyle "Oyun: [Oyun Adı]" (örn: Oyun: Gwakkamole) şeklinde oluştur.
+` : `
+### 🚀 İLK KAYIT ZORUNLULUĞU (GEÇERSİZ/PASİF - KESİNLİKLE UYGULAMA)
+- ÖNEMLİ: Analiz ettiğin bu video parçası videonun başlangıcını (0. saniyesini) İÇERMEMEKTEDİR (başlangıç zamanın: ${formatSecondsToHHMMSS(startTime)}). Dolayısıyla "İLK KAYIT ZORUNLULUĞU" (oyun adı/game name kaydı oluşturma) kuralını KESİNLİKLE İŞLEME/UYGULAMA. İlk kaydın doğrudan bu aralıktaki gerçek bir olay olmalıdır.
+`) : '';
+
         const timingInstructions = `
 ### ZAMAN DOĞRULUK TALİMATLARI (KRİTİK)
 - Bu videonun TOPLAM SÜRESİ: ${formatSecondsToHHMMSS(videoDuration)} (${Math.round(videoDuration)} saniye).
@@ -897,6 +915,8 @@ ${previousChunkSummary}
 - Eğer videoda görünen bir saat, sayaç veya zamanlayıcı varsa, onu referans ALMA — bunlar videonun kendi zamanı değil, içerik zamanıdır.
 - Zaman damgalarını SS:DD:SS formatında yaz.
 - Aralığın dışına çıkan timecode YAZMA.
+
+${firstRecordRuleInstruction}
 `;
         if (selectedMode === 'Detaylı Transkript') {
           chunkPrompt = `${timingInstructions}
@@ -1041,6 +1061,8 @@ ${basePrompt}
 - Örnek: Videonun 5. saniyesindeki bir olay = ${formatSecondsToHHMMSS(startTime + 5)}
 - İlk timecode en erken ${formatSecondsToHHMMSS(startTime)}, son timecode en geç ${formatSecondsToHHMMSS(endTime)} olabilir.
 - Zaman damgalarını SS:DD:SS formatında yaz.
+
+${firstRecordRuleInstruction}
 
 - set_timecodes fonksiyonunu sonuçlarla çağır.
 - TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
@@ -1633,10 +1655,100 @@ ${basePrompt}
       text: updatedText,
     };
 
+    // Zaman koduna göre listeyi yeniden sırala
+    updatedList.sort((a, b) => timeToSecs(a.startTime || a.time) - timeToSecs(b.startTime || b.time));
+
     setTimecodeList(updatedList);
     setAnalysisError(null);
     setAnalysisWarning('✏️ Transkript satırı güncellendi.');
     handleCancelEditTimecode();
+  };
+
+  // Transkript kopyalama/çoğaltma
+  const handleCloneTimecode = (index: number) => {
+    if (!timecodeList || !timecodeList[index]) return;
+
+    const selected = timecodeList[index];
+    const cloned = {
+      ...selected,
+    };
+
+    const updatedList = [...timecodeList];
+    updatedList.splice(index + 1, 0, cloned);
+
+    setTimecodeList(updatedList);
+    setAnalysisError(null);
+    setAnalysisWarning(`📋 Transkript satırı kopyalandı (satır #${index + 1} kopyası #${index + 2} olarak eklendi).`);
+
+    // Otomatik olarak kopyayı düzenleme modunda açalım
+    setTimeout(() => {
+      handleStartEditTimecode(index + 1);
+    }, 100);
+  };
+
+  // Yeni transkript manuel ekleme işlemleri
+  const handleStartAddTimecode = () => {
+    const formattedNow = formatSecondsToHHMMSS(currentPlaybackTime);
+    setAddStartTime(formattedNow);
+    setAddEndTime(formattedNow);
+    setAddCategory('');
+    setAddDescription('');
+    setAddLocation('');
+    setIsAddModalOpen(true);
+    setAnalysisError(null);
+  };
+
+  const handleCancelAddTimecode = () => {
+    setIsAddModalOpen(false);
+    setAddStartTime('');
+    setAddEndTime('');
+    setAddCategory('');
+    setAddDescription('');
+    setAddLocation('');
+  };
+
+  const handleSaveAddTimecode = () => {
+    const startTime = addStartTime.trim();
+    const endTime = addEndTime.trim();
+    const description = addDescription.trim();
+
+    if (!startTime) {
+      setAnalysisError('Zaman kodu için başlangıç zamanı boş bırakılamaz.');
+      return;
+    }
+
+    if (!description) {
+      setAnalysisError('Zaman kodu için açıklama alanı boş bırakılamaz.');
+      return;
+    }
+
+    if (parseTimeToSeconds(startTime) > parseTimeToSeconds(endTime || startTime)) {
+      setAnalysisError('Zaman kodunda başlangıç zamanı, bitiş zamanından büyük olamaz.');
+      return;
+    }
+
+    const safeEndTime = endTime || startTime;
+    const normalizedCategory = parseCategoryInput(addCategory);
+    const updatedText = formatTranscriptText(addCategory, description);
+
+    const newTimecode = {
+      time: startTime,
+      startTime,
+      endTime: safeEndTime,
+      category: normalizedCategory,
+      description,
+      location: addLocation.trim() || undefined,
+      text: updatedText,
+    };
+
+    const updatedList = timecodeList ? [...timecodeList] : [];
+    updatedList.push(newTimecode);
+    updatedList.sort((a, b) => timeToSecs(a.startTime || a.time) - timeToSecs(b.startTime || b.time));
+
+    setTimecodeList(updatedList);
+    setAnalysisError(null);
+    setAnalysisWarning('➕ Yeni transkript satırı eklendi.');
+    handleCancelAddTimecode();
   };
 
   // Belirli zaman aralığındaki transkriptleri toplu silme
@@ -2473,6 +2585,17 @@ ${basePrompt}
                   <span className="icon">expand_more</span>
                 </summary>
                 <div className="panel-content">
+                  <div className="transcript-actions-bar" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <button
+                      type="button"
+                      className="button primary small"
+                      onClick={handleStartAddTimecode}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '36px', minHeight: 'auto', padding: '6px 12px', borderRadius: '8px', fontSize: '13px' }}
+                    >
+                      <span className="icon" style={{ fontSize: '18px' }}>add</span>
+                      Yeni Transkript Ekle
+                    </button>
+                  </div>
                   {activeMode === 'Tablo' ? (
                     <table>
                       <thead>
@@ -2507,6 +2630,14 @@ ${basePrompt}
                                   title="Bu satırı düzenle"
                                 >
                                   <span className="icon">edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="clone-btn"
+                                  onClick={(e) => { e.stopPropagation(); handleCloneTimecode(i); }}
+                                  title="Bu satırı kopyala / çoğalt"
+                                >
+                                  <span className="icon">content_copy</span>
                                 </button>
                                 <button
                                   type="button"
@@ -2555,6 +2686,14 @@ ${basePrompt}
                               </button>
                               <button
                                 type="button"
+                                className="clone-btn"
+                                onClick={(e) => { e.stopPropagation(); handleCloneTimecode(i); }}
+                                title="Bu satırı kopyala / çoğalt"
+                              >
+                                <span className="icon">content_copy</span>
+                              </button>
+                              <button
+                                type="button"
                                 className="delete-btn"
                                 onClick={(e) => { e.stopPropagation(); handleDeleteTimecode(i); }}
                                 title="Bu satırı sil"
@@ -2594,6 +2733,14 @@ ${basePrompt}
                                 title="Bu satırı düzenle"
                               >
                                 <span className="icon">edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="clone-btn"
+                                onClick={(e) => { e.stopPropagation(); handleCloneTimecode(i); }}
+                                title="Bu satırı kopyala / çoğalt"
+                              >
+                                <span className="icon">content_copy</span>
                               </button>
                               <button
                                 type="button"
@@ -2728,6 +2875,86 @@ ${basePrompt}
                 Kaydet
               </button>
               <button type="button" className="button secondary" onClick={handleCancelEditTimecode}>
+                <span className="icon">close</span>
+                Vazgeç
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAddModalOpen && (
+        <div className="modal-backdrop" onClick={handleCancelAddTimecode}>
+          <div className="modal-content transcript-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Yeni Transkript Satırı Ekle</h2>
+              <button type="button" className="modal-close" onClick={handleCancelAddTimecode}>
+                <span className="icon">close</span>
+              </button>
+            </div>
+
+            <div className="time-inputs">
+              <div className="time-input-group">
+                <label htmlFor="add-start-time">Başlangıç</label>
+                <input
+                  id="add-start-time"
+                  type="text"
+                  placeholder="00:00:00"
+                  value={addStartTime}
+                  onChange={(e) => setAddStartTime(e.target.value)}
+                />
+              </div>
+              <div className="time-input-group">
+                <label htmlFor="add-end-time">Bitiş</label>
+                <input
+                  id="add-end-time"
+                  type="text"
+                  placeholder="00:00:00"
+                  value={addEndTime}
+                  onChange={(e) => setAddEndTime(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="time-input-group">
+              <label htmlFor="add-category">Kategori</label>
+              <input
+                id="add-category"
+                type="text"
+                placeholder="Örn: go response, action points"
+                value={addCategory}
+                onChange={(e) => setAddCategory(e.target.value)}
+              />
+            </div>
+
+            <div className="time-input-group">
+              <label htmlFor="add-description">Açıklama</label>
+              <textarea
+                id="add-description"
+                rows={3}
+                placeholder="Açıklama giriniz..."
+                value={addDescription}
+                onChange={(e) => setAddDescription(e.target.value)}
+              />
+            </div>
+
+            <div className="time-input-group">
+              <label htmlFor="add-location">Konum (opsiyonel)</label>
+              <input
+                id="add-location"
+                type="text"
+                placeholder="Örn: Sol üst"
+                value={addLocation}
+                onChange={(e) => setAddLocation(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="button" onClick={handleSaveAddTimecode}>
+                <span className="icon">add</span>
+                Ekle
+              </button>
+              <button type="button" className="button secondary" onClick={handleCancelAddTimecode}>
                 <span className="icon">close</span>
                 Vazgeç
               </button>

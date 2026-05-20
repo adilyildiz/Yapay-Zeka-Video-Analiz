@@ -1239,6 +1239,46 @@ video {
 }
 
 
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.videoPlayer:fullscreen {
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.videoPlayer:fullscreen .videoFrame {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
+  height: 100% !important;
+}
+
+.videoPlayer:fullscreen video {
+  max-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.videoPlayer:fullscreen .videoControls {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  padding: 15px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+
 /* --- New Step-by-Step UI Styles --- */
 
 .step-container {
@@ -3593,4 +3633,64 @@ video {
   padding: 12px 18px;
   font-size: 14px;
   min-height: 44px;
+}
+
+/* Premium Transcript Row Action Buttons */
+.row-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid var(--border);
+  padding: 4px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  opacity: 0.8;
+  transition: all 0.2s ease;
+}
+
+.deletable-row:hover .row-action-buttons {
+  opacity: 1;
+  background: rgba(30, 41, 59, 0.8);
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.row-action-buttons button {
+  background: none !important;
+  border: none !important;
+  color: var(--text-secondary);
+  width: 28px !important;
+  height: 28px !important;
+  min-height: auto !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: none !important;
+}
+
+.row-action-buttons button .icon {
+  font-size: 16px !important;
+}
+
+.row-action-buttons button.edit-btn:hover {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: var(--primary) !important;
+  transform: scale(1.05);
+}
+
+.row-action-buttons button.clone-btn:hover {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: var(--success) !important;
+  transform: scale(1.05);
+}
+
+.row-action-buttons button.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: var(--error) !important;
+  transform: scale(1.05);
 }

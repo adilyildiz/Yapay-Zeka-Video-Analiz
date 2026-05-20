@@ -19,7 +19,7 @@
 
 import c from 'classnames';
 // FIX: Import React to provide the 'React' namespace for types like React.CSSProperties.
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {timeToSecs} from './utils';
 
 const formatTime = (t: number) =>
@@ -102,6 +102,8 @@ export default function VideoPlayer({
   const [currentCaptions, setCurrentCaptions] = useState<string[]>([]);
   const [seekSliderValue, setSeekSliderValue] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const playerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const currentSecs = duration * scrubberTime || 0;
   const currentPercent = scrubberTime * 100;
   const timecodeListReversed = useMemo(
@@ -199,6 +201,30 @@ export default function VideoPlayer({
     setPlaybackRate(rate);
   }, [video]);
 
+  const toggleFullscreen = useCallback(() => {
+    const element = playerRef.current;
+    if (!element) return;
+
+    if (!document.fullscreenElement) {
+      element.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === playerRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
   const handleSeekSliderChange = (value: number) => {
     if (!video) return;
     const seekTime = (value / 100) * duration;
@@ -278,6 +304,9 @@ export default function VideoPlayer({
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
           skip(10);
+        } else if (e.key === 'f' || e.key === 'F') {
+          e.preventDefault();
+          toggleFullscreen();
         }
       }
     };
@@ -287,10 +316,10 @@ export default function VideoPlayer({
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [togglePlay, skip]);
+  }, [togglePlay, skip, toggleFullscreen]);
 
   return (
-    <div className="videoPlayer">
+    <div className="videoPlayer" ref={playerRef}>
       {url && !isLoadingVideo ? (
         <>
           <div className="videoFrame">
@@ -456,8 +485,20 @@ export default function VideoPlayer({
                   ))}
                 </select>
               </div>
-              <div className="timeDisplay">
-                {formatTime(currentSecs)} / {formatTime(duration)}
+              <div className="rightControls">
+                <div className="timeDisplay">
+                  {formatTime(currentSecs)} / {formatTime(duration)}
+                </div>
+                <button
+                  onClick={toggleFullscreen}
+                  className="secondary"
+                  title={isFullscreen ? 'Tam ekrandan çık (f)' : 'Tam ekran yap (f)'}
+                  style={{ minWidth: '44px', height: '44px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <span className="icon">
+                    {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+                  </span>
+                </button>
               </div>
             </div>
             
