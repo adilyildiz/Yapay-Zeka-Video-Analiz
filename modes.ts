@@ -74,17 +74,27 @@ Bu videolarda şu oyunlardan biri oynuyor olabilir. Eğer tanırsan, o oyuna öz
 - **All You Can E.T. (Task Switching):** Ekranın alt kısmında süt ve kek gibi yiyecek/içecek düğmeleri beliriyor; oyuncu aktif kurala göre doğru düğmeye tıklayarak ilgili canavara gönderiyor. Canavarlar ekranda belirme sırasına göre sıraya giriyor; oyuncu sırayı takip ederek doğru canavar için doğru düğmeyi seçmeli. Seviye içinde kurallar değişebilir. Kural değişim anları, eski kurala göre hatalı tıklamalar ve yeni kurala adaptasyon EN ÖNEMLİ anlardır — ATLAMA.`,
     isList: true,
   },
-  
+
   'Kategorik Süreç Transkripti': {
     emoji: '📜',
     prompt: (input) => `Videoyu analiz et ve aşağıdaki olay türlerini ve kuralları kullanarak detaylı bir transkript oluştur. Ardından her olayı, kullanıcının belirttiği kategorilerle eşleştir. Her bir olayı tespit ettiğinde, videodaki zaman koduyla birlikte \`set_categorical_timecodes\` fonksiyonuna gönderilen bir nesneye yerleştir.
 
 ### ⏱️ ZAMAN DAMGASI DOĞRULUĞU KURALLARI (EN ÖNCELİKLİ)
 - Her olayın zaman damgasını belirlerken, videonun GERÇEK oynatma zamanını kullan.
-- Videonun başı 00:00:00'dır. Tüm zaman damgaları bu başlangıca göre MUTLAK olarak hesaplanmalıdır.
+- Videonun başı 00:00:00.0'dır. Tüm zaman damgaları (startTime ve endTime) bu başlangıca göre MUTLAK olarak hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma.
 - Zaman damgalarını tahmin etme. Bir olayı kaydetmeden önce, o anın videodaki tam zamanını doğrula.
 - Ardışık olaylar arasında mantıklı zaman artışı olmalıdır — birden saniyeler atlama veya aynı zaman damgasını tekrarlama.
-- Video içeriğindeki sayaçları veya süre göstergelerini video zamanı olarak KULLANMA.
+- Video içeriğindeki sayaçları, süre göstergelerini veya zamanlayıcıları video zamanı olarak KULLANMA — bunlar içerik zamanıdır, video zamanı değil.
+
+### 🚀 İLK KAYIT ZORUNLULUĞU (VİDEO BAŞLANGICI)
+- Analiz edeceğin videonun ilk transkript kaydı (ilk olay) MUTLAKA videoda oynatılan oyunun adı olmalıdır.
+- Bu ilk kaydı şu şekilde oluştur ve \`set_categorical_timecodes\` fonksiyonuna gönder:
+  - **startTime:** "00:00:00.0"
+  - **endTime:** "00:00:01.0"
+  - **category:** "game name" veya oyunla ilgili genel bir kategori adı (örn: "Gwakkamole", "Crush Stations", "All You Can E.T.")
+  - **description:** Tespit ettiğin oyunun adını yaz (Örn: "Oyun: Gwakkamole", "Oyun: Crush Stations" veya "Oyun: All You Can E.T.")
+  - **location:** "ekran ortası"
+- Bu kayıt, videodaki diğer tüm olaylardan önce gelen en birinci kayıt olmalıdır.
 
 ### 1. Tıklama Olayları
 - **Tetikleyici:** Ekranda anlık olarak beliren küçük, yarı şeffaf beyaz daireyi tespit et.
@@ -121,39 +131,6 @@ Yukarıdaki transkript kurallarıyla tespit ettiğin HER olayı, aşağıdaki ku
 - **ÇOKLU KATEGORİ KURALI:** Bir olay birden fazla kategoriye ait olabilir. Bu durumda, kategorileri bir dizi (array) içinde belirt. Kategoriler birbirine benzer olsa bile, ilişkili olduğunu düşündüğün tüm kategorileri döndür.
 - **BİLİŞSEL KATEGORİ GEREKÇELENDİRME:** Soyut/bilişsel kategoriler (working memory, inhibitory control, cognitive flexibility, attention, pattern recognition, spatial reasoning, problem solving, decision making vb.) atadığında, description alanında bu çıkarımın GEREKÇESİNİ açıkla. Hangi görsel ipucundan bu bilişsel sürece ulaştığını belirt. Gerekçesiz bilişsel kategori atama.
 
-### 5.0 ⚠️ ZORUNLU ÖNCELİKLİ KATEGORİ KURALI
-Aşağıdaki görsel olayları tespit ettiğinde, belirtilen kategorileri MUTLAKA ata. Bu kurallar diğer tüm kurallardan ÖNCELİKLİDİR:
-
-**Gwakkamole (avokado/guacamole canavarları görüyorsan):**
-| Görsel Olay | ZORUNLU Kategoriler |
-|---|---|
-| Kasklı/korumalı avokado belirdi (No-Go hedefi) | \`inhibitory control\`, \`no-go response\`, \`object appearance\` |
-| Kasklı avokado belirdi ve oyuncu TIKLAMADI | \`inhibitory control\`, \`inhibition success\`, \`no-go response\` |
-| Kasklı avokado belirdi ve oyuncu TIKLADI (hata; sarı yumruk kırmızıya dönüp titrer) | \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` |
-| Kasksız/normal avokado belirdi (Go hedefi) | \`go response\`, \`object appearance\` |
-| Normal avokadoya tıklandı (üstten sarı yumruk ezme animasyonu) | \`go response\`, \`click/tap\`, \`action points\` |
-| Ekranda hem kasklı hem kasksız avokado var | \`inhibitory control\`, \`selective attention\`, \`decision making\` |
-
-**Crush Stations (renkli baloncuklar + deniz canlıları görüyorsan):**
-| Görsel Olay | ZORUNLU Kategoriler |
-|---|---|
-| Yeni baloncuklar ekranda belirdi | \`working memory\`, \`encoding\`, \`attention\` |
-| Baloncuk (tekli/ikili/üçlü) ekrandan kayboldu | \`working memory\`, \`memory recall\` |
-| Çember seçim arayüzü açıldı | \`working memory\`, \`memory recall\`, \`decision making\` |
-| Oyuncu renk veya canlı türü seçti | \`working memory\`, \`decision making\`, \`memory recall\` |
-| Doğru seçim yapıldı | \`working memory\`, \`feedback\` |
-| Yanlış seçim yapıldı (ahtapot yedi) | \`working memory\`, \`error detection\`, \`feedback\` |
-
-**All You Can E.T. (yiyecek/içecek düğmeleri + canavarlar + kurallar görüyorsan):**
-| Görsel Olay | ZORUNLU Kategoriler |
-|---|---|
-| Yeni canavar ekranda belirdi (sıraya girdi) | \`object appearance\`, \`attention\`, \`sequencing\` |
-| Süt veya kek düğmesi ekranda belirdi | \`object appearance\`, \`decision making\` |
-| Oyuncu doğru düğmeye tıkladı (kurala uygun) | \`cognitive flexibility\`, \`decision making\`, \`click/tap\` |
-| Kural değişti | \`cognitive flexibility\`, \`task switching\`, \`rule change\` |
-| Eski kurala göre yanlış düğmeye tıklandı (uzaylı dönerek düşer) | \`cognitive flexibility\`, \`perseveration\`, \`inhibitory control\`, \`error detection\` |
-| Yeni kurala doğru uyum (ilk doğru tıklama) | \`cognitive flexibility\`, \`adaptation\`, \`task switching\` |
-
 ### 5.1 Bilişsel Kategori Tespit Rehberi
 Bilişsel kategoriler doğrudan gözlenemez; ekrandaki görsel olaylardan çıkarılır. Aşağıdaki rehberi kullan:
 - **working memory:** Oyuncu birden fazla bilgiyi aynı anda hatırlaması gereken durumlar (eşleştirme oyunu, sıra takibi, birden fazla nesneyi akılda tutma).
@@ -184,31 +161,29 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
 - **Kaynak:** Plass & Pawar, 2020
 - **Oyun Tanımı:** Ekranda avokado şekilli canavarlar çıkar. Bazıları vurulabilir (Go hedefleri), bazıları VURULMAMASI gereken (No-Go hedefleri) canavarlardır. Oyuncunun doğru canavarları vurması, yanlış olanlara DOKUNMAMASI gerekir.
 - **Birincil Yürütücü İşlev:** Inhibition (Dürtü Kontrolü)
-- **Go vs No-Go GÖRSEL AYRIMLARI:**
+- **Go vs No-Go GÖRSEL AYRIMLARI & TIKLAMA ANİMASYONLARI:**
   - **No-Go hedefi (VURMA!):** Kasklı avokado canavar. Başında kask/miğfer olan avokado = VURULMAMASI GEREKEN hedeftir.
   - **Go hedefi (VUR!):** Kasksız / sade avokado canavar. Başında hiçbir aksesuar olmayan avokado = vurulacak hedeftir.
   - ⚠️ **KURAL:** Ekranda kasklı/miğferli bir avokado gördüğünde, BU BİR İNHİBİSYON ANIDIR. \`inhibitory control\` ve \`no-go response\` kategorilerini MUTLAKA ata.
+  - **Go tıklama animasyonu:** Üstten inen sarı yumruk ile ezme animasyonu olarak görünür.
+  - **No-Go failure tıklama animasyonu:** Kasklı avokadoya inen bu sarı yumruk kırmızıya döner ve titreme/sarsılma ile hatayı gösterir.
 
-- **🎨 GWAKKAMOLE OYUNUNA ÖZGÜ KASK GÖRSELİ:**
-  Bu oyunda kaskın görünümü şöyledir:
-  - **GRİ / METALİK RENKLİ, üzerinde SİVRİ ÇIKINTILAR/DİKENLER (spikes)** bulunan bir miğferdir.
-  - Avokadonun başının üstüne tam oturan, gövde rengi olan yeşilden tamamen farklı, metalik gri tonlarında bir nesnedir.
-  - ⚠️ **DİKKAT:** Kask canlı renklerde DEĞİLDİR; modelin başındaki GRİ ve DİKENLİ yapıyı aramalısın.
-
-- **🔍 ZORUNLU GÖRSEL DOĞRULAMA PROTOKOLÜ — Her avokado için bu adımları sırayla uygula:**
+- **🎨 GWAKKAMOLE OYUNUNA ÖZGÜ KASK GÖRSELİ & GÖRSEL DOĞRULAMA PROTOKOLÜ:**
+  Bu oyunda kask; avokadonun başının üstüne tam oturan, gövde rengi olan yeşilden tamamen farklı **GRİ/METALİK renkli ve üzerinde SİVRİ ÇIKINTILAR/DİKENLER (spikes)** bulunan metalik bir miğferdir. Canlı renklerde değildir.
+  **Her avokado için bu adımları sırayla uygula:**
   1. **Baş bölgesini incele:** Avokadoyu tespit ettiğinde, ÖNCE baş bölgesine bak.
-  2. **Kasklı/miğferli göstergeler (Tespiti = No-Go):** Başın üstünde **GRİ renkli ve DİKENLİ/ÇİVİLİ** metalik bir miğfer varsa, bu kesinlikle No-Go hedefidir.
-  3. **Kasksız göstergeler (Tespiti = Go):** Baş bölgesi gövdeyle tamamen aynı **YEŞİL** renkteyse, düz/yuvarlak iniyorsa ve üstünde hiçbir gri nesne/çıkıntı yoksa, bu bir Go hedefidir.
-  4. **Şüphe kuralı:** Baş bölgesinde gri dikenli nesne olup olmadığından EMIN DEĞİLSEN → O avokadoyu hiç raporlama.
-  5. **Sınıflandırmayı description'a yaz:** "Başının üstünde gri dikenli kask görünüyor → Kasklı (No-Go)" veya "Başı avokado gövdesiyle aynı yeşil renkte, üstünde nesne yok → Kasksız (Go)" şeklinde açıkla.
+  2. **Kasklı göstergeler (Tespiti = No-Go):** Başın üstünde gri ve dikenli kask/miğfer varsa, bu kesinlikle No-Go hedefidir.
+  3. **Kasksız göstergeler (Tespiti = Go):** Baş bölgesi gövdeyle tamamen aynı **YEŞİL** renkteyse, düz/yuvarlak iniyorsa ve üstünde hiçbir gri nesne/çıkıntı/kask yoksa, bu bir Go hedefidir.
+  4. **Şüphe kuralı:** Baş bölgesinde gri dikenli kask olup olmadığından veya başın tamamen kasksız yeşil olduğundan TAM OLARAK EMİN DEĞİLSEN → o avokadoyu hiç raporlama.
+  5. **Sınıflandırma açıklaması:** Bu çıkarımı \`description\` alanında "Başının üstünde gri dikenli kask görünüyor → Kasklı (No-Go)" veya "Başı avokado gövdesiyle aynı yeşil renkte, üstünde nesne yok → Kasksız (Go)" şeklinde açıkla.
 
 - **❌ EN KRİTİK HATA:** Kasklı (gri dikenli) bir avokadoyu "kasksız" olarak sınıflandırmak. Bu hata, tüm inhibisyon verisini bozar.
 - **Kritik Tespit Anları:**
   - **İNHİBİSYON BAŞARISI:** Kasklı avokado (No-Go hedefi) ekranda belirip oyuncu TIKLAMADAN beklediğinde → \`inhibitory control\`, \`inhibition success\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokado belirdi, oyuncu tıklamaktan başarıyla kaçındı" yaz.
-  - **İNHİBİSYON BAŞARISIZLIĞI:** Kasklı avokadoya tıklanırsa ve üstten inen sarı yumruk **kırmızıya dönüp titreyen/sarsılan** bir vuruşa dönüşürse → \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokadoya kırmızı/titreyen yumruk indi — inhibisyon hatası" yaz.
-  - **GO TEPKİSİ:** Kasksız avokadoya (Go hedefine) doğru şekilde tıklama, genelde üstten inen **sarı yumruk ile ezme animasyonu** olarak görünür → \`go response\`, \`click/tap\`, \`action points\` kategorisi.
+  - **İNHİBİSYON BAŞARISIZLIĞI:** Kasklı avokadoya tıklanırsa (Yukarıda tanımlanan No-Go failure tıklama animasyonu görüldüğünde) → \`inhibitory control\`, \`inhibition failure\`, \`no-go response\` kategorisi ata. Description'da "Kasklı avokadoya kırmızı/titreyen yumruk indi — inhibisyon hatası" yaz.
+  - **GO TEPKİSİ:** Kasksız avokadoya (Go hedefine) doğru şekilde tıklandığında (Yukarıda tanımlanan Go tıklama animasyonu görüldüğünde) → \`go response\`, \`click/tap\`, \`action points\` kategorisi.
   - **KAÇIRILAN GO HEDEFİ:** Kasksız avokado ekranda belirip tıklanmadan kaybolursa → \`attention\`, \`processing speed\`, \`go failure\` kategorisi.
-- **Görsel İpuçları:** Yeşil gövde; No-Go = gri dikenli kask, Go = kasksız/yeşil baş. Go tıklaması = üstten inen sarı yumrukla ezme animasyonu; No-Go failure = kasklı hedefe inen yumruğun kırmızıya dönmesi ve titremesi/sarsılması.
+- **Görsel İpuçları:** Yeşil gövde; No-Go = gri dikenli kask, Go = kasksız/yeşil baş. Tıklama animasyonları ve detaylar için yukarıdaki "Görsel Ayrımlar ve Tıklama Animasyonları" ile "Doğrulama Protokolü" tanımlarını referans al.
 
 #### 🔵 Crush Stations (Working Memory)
 - **Kaynak:** NYU CREATE
@@ -247,8 +222,8 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
   4. **Doğru/Yanlış:** Yiyecek doğruysa uzaylı gülümser ve yukarı doğru süzülür, puan kazanılır. Yiyecek YANLIŞSA uzaylı dönerek aşağıya düşer (yani ekranda kalmaz).
 
 - **🧠 KURAL DEĞİŞİMİ (RULE SWITCHING) MANTIĞI — DİKKAT ETMEN GEREKEN KRİTİK UNSUR:**
-  - **Renk Kuralı:** Yeşiller Kek, Turuncular Süt. (Uzaylıların kaç gözü olduğu önemsizdir).
-  - **Göz Sayısı Kuralı:** 1 Gözlüler Kek, 2 Gözlüler Süt. (Uzaylıların rengi önemsizdir).
+  - **Renk Kuralı:** Örneğin Yeşiller Kek, Turuncular Süt. (Uzaylıların kaç gözü olduğu önemsizdir).
+  - **Göz Sayısı Kuralı:** Örneğin 1 Gözlüler Kek, 2 Gözlüler Süt. (Uzaylıların rengi önemsizdir).
   - Seviye geçişlerindeki Kural Ekranlarını incele; kuralın Renk'ten Göz Sayısına (veya tam tersine) döndüğü anı tespit etmek EN ÖNEMLİ görevindir.
 
 - **Kritik Tespit Anları:**
@@ -269,18 +244,13 @@ Bu videolarda aşağıdaki oyunlardan biri oynuyor olabilir. Oyunu tanıdığın
 - Oyuncunun YAPMADIĞI eylemler de önemlidir (örn: tıklamaması gereken yere tıklamaması = başarılı inhibisyon). Sadece yapılan eylemleri değil, yapılmayan ama beklenen/kaçınılan eylemleri de raporla.
 
 ### 6. Zamanlama ve Format Kuralları
-- **Olayları Gruplama:** Eğer 2 saniyeden kısa bir zaman aralığında birden fazla olay oluşuyorsa (örn: tıklama + puan belirmesi + nesne kaybolması hep aynı anda), bu olayları TEK BİR kayıt altında gruplayabilirsin. Gruplanmış olayda tüm olayları description alanında ayrı ayrı açıkla ve tüm ilgili kategorileri ekle. startTime grubun ilk olayının başlangıcı, endTime grubun son olayının GERÇEK bitiş zamanı olmalıdır. 2 saniyeden uzun aralıklı olayları GRUPLAMA — ayrı raporla.
-- **GERÇEK BİTİŞ ZAMANI ZORUNLULUĞU:** \`endTime\` değerini asla uydurma veya kısaltma. Her olayın ekranda gerçekte ne kadar sürdüğünü gözlemle ve endTime'ı buna göre yaz. Bir nesne ekranda 1.5 saniye kalıyorsa endTime = startTime + 1.5s olmalıdır. Olayın bitiş zamanını startTime'a çok yakın bir değer yaparak "geçiştirme" — gerçek süreyi yansıt.
-- **Konum Belirleme:** Her olayın ekrandaki konumunu mutlaka belirt (örn: "sol üst köşe", "ekran ortası", "sağ alt bölge").
-- **Mutlak Zaman:** Tüm zaman kodları (startTime ve endTime) videonun başlangıcından (00:00:00.0) itibaren hesaplanmalıdır. Asla bir önceki olayın bitiş zamanına göre göreceli hesaplama yapma.
-- **Videonun Oynatma Zamanını Kullan:** Zaman damgalarını belirlerken videonun gerçek oynatma zamanını gözlemle. Video içeriğinde görünen sayaçları, süre göstergelerini veya zamanlayıcıları video zamanı olarak KULLANMA — bunlar içerik zamanıdır, video zamanı değil.
-- **Zaman Damgalarını Tahmin Etme:** Her olayı kaydetmeden önce o anın videodaki tam zamanını doğrula. Ardışık olaylar arasında mantıklı bir zaman artışı olmalıdır.
-- **Farklı Zamanlar Zorunluluğu:** \`startTime\` ve \`endTime\` **asla aynı olamaz**. Her olay için başlangıç ve bitiş zamanı arasında en az 0.1 saniyelik bir fark olmalıdır.
-- **Maksimum Süre ve Bölme:** Bir olay en fazla 5 saniye sürebilir. Eğer bir olay 5 saniyeden uzun sürerse, onu 5 saniyelik veya daha kısa parçalara bölerek birden fazla olay olarak raporla. Her parçanın \`description\` alanına, olayın devam ettiğini belirten bir ifade ekle (örn: "Seviye seçimi devam ediyor (Bölüm 1/3)").
-- **Gerçek Süre Gözlemi:** Her olayın videodaki gerçek süresini izleyerek hesapla. Bir nesne veya menü ekranda ne kadar süre kalıyorsa, o kadar süre ver. Tahmini süre kullanma.
+- **GERÇEK SÜRE VE BİTİŞ ZAMANI ZORUNLULUĞU:** \`endTime\` değerini asla uydurma veya kısaltma. Her olayın videodaki gerçek süresini izleyerek hesapla. Bir nesne veya menü ekranda ne kadar süre kalıyorsa, o kadar süre ver. Tahmini süre kullanma. Bir nesne ekranda 1.5 saniye kalıyorsa endTime = startTime + 1.5s olmalıdır. Olayın bitiş zamanını startTime'a çok yakın bir değer yaparak "geçiştirme" — gerçek süreyi yansıt.
   - **Anlık Olaylar (örn: Tıklama):** Genellikle 0.1 - 0.4 saniye.
   - **Orta Süreli Olaylar (örn: Nesne belirme, Puan gösterimi):** Genellikle 0.5 - 2 saniye.
   - **Uzun Süreli Olaylar (örn: Menü görünümü, Seviye seçimi):** Genellikle 2 saniyeden fazla.
+- **Konum Belirleme:** Her olayın ekrandaki konumunu mutlaka belirt (örn: "sol üst köşe", "ekran ortası", "sağ alt bölge").
+- **Farklı Zamanlar Zorunluluğu:** \`startTime\` ve \`endTime\` **asla aynı olamaz**. Her olay için başlangıç ve bitiş zamanı arasında en az 0.1 saniyelik bir fark olmalıdır.
+- **Maksimum Süre ve Bölme:** Bir olay en fazla 5 saniye sürebilir. Eğer bir olay 5 saniyeden uzun sürerse, onu 5 saniyelik veya daha kısa parçalara bölerek birden fazla olay olarak raporla. Her parçanın \`description\` alanına, olayın devam ettiğini belirten bir ifade ekle (örn: "Seviye seçimi devam ediyor (Bölüm 1/3)").
 - **Zaman Formatı:** Zamanı \`SS:DD:SS.X\` formatında, 0.1 saniye (100ms) hassasiyetinde belirt. (Örnek: 00:01:23.4)
 
 ### 7. Çıktı Formatı
