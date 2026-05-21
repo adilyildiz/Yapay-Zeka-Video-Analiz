@@ -263,38 +263,53 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
     console.log('File processed for OpenAI.');
     return uploadedFile;
   } else {
-    // Gemini API
-    const blob = new Blob([file], {type: file.type});
+    // Gemini API — önce tarayıcı tarafı denenir, başarısız olursa sunucu proxy'ye düşer
+    const apiKey = currentConfig.gemini!.apiKey;
 
-    console.log('Uploading to Gemini...');
-    const uploadedFile = await geminiClient.files.upload({
-      file: blob,
-      config: {
-        displayName: file.name,
-      },
-    });
-    console.log('Uploaded.');
-    console.log('Getting...');
-    let getFile = await geminiClient.files.get({
-      name: uploadedFile.name,
-    });
-    while (getFile.state === 'PROCESSING') {
-      getFile = await geminiClient.files.get({
-        name: uploadedFile.name,
+    // 1. Tarayıcı taraflı doğrudan upload denemesi
+    try {
+      console.log('Uploading to Gemini (browser-side)...');
+      const blob = new Blob([file], { type: file.type });
+      const uploadedFile = await geminiClient.files.upload({
+        file: blob,
+        config: { displayName: file.name },
       });
-      console.log(`current file status: ${getFile.state}`);
-      console.log('File is still processing, retrying in 5 seconds');
 
-      await new Promise((resolve) => {
-        setTimeout(resolve, 5000);
+      let getFile = await geminiClient.files.get({ name: uploadedFile.name! });
+      while (getFile.state === 'PROCESSING') {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        getFile = await geminiClient.files.get({ name: uploadedFile.name! });
+        console.log(`current file status: ${getFile.state}`);
+      }
+      if (getFile.state === 'FAILED') {
+        throw new Error('File processing failed.');
+      }
+      console.log('Done (browser-side)');
+      return getFile;
+    } catch (browserError) {
+      // 2. CORS veya başka bir hata → sunucu proxy'ye düş
+      console.warn('Tarayıcı taraflı upload başarısız, sunucu proxy deneniyor:', browserError);
+
+      const arrayBuffer = await file.arrayBuffer();
+      const response = await fetch('/api/gemini-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type,
+          'X-Gemini-Api-Key': apiKey,
+          'X-Filename': encodeURIComponent(file.name),
+        },
+        body: arrayBuffer,
       });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(`Gemini upload başarısız: ${err.error}`);
+      }
+
+      const uploadedFile = await response.json();
+      console.log('Done (server proxy)');
+      return uploadedFile;
     }
-    console.log(getFile.state);
-    if (getFile.state === 'FAILED') {
-      throw new Error('File processing failed.');
-    }
-    console.log('Done');
-    return getFile;
   }
 }
 
