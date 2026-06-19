@@ -211,7 +211,7 @@ function findActiveTranscriptIndex(timecodes: any[] | null, currentSeconds: numb
 function saveModePreferences(
   mode: string, customPrompt: string, chartMode: string, chartPrompt: string,
   categoricalMode: string, categoricalPrompt: string,
-  chunkDuration: number | 'all', ollamaSendMode: 'frame' | 'video',
+  chunkDuration: number | 'all', ollamaSendMode: 'frame' | 'video' | 'object_bulk' | 'object_sequential',
   initialScanContextMode: 'contextual' | 'independent',
   sliceVideoFpsEnabled: boolean, sliceVideoFps: number,
   sliceVideoResizeEnabled: boolean, sliceVideoHeight: number,
@@ -321,7 +321,7 @@ export default function App() {
   const [deleteRangeStart, setDeleteRangeStart] = useState<string>('');
   const [deleteRangeEnd, setDeleteRangeEnd] = useState<string>('');
   const [analyzedChunks, setAnalyzedChunks] = useState<{start: number, end: number}[]>([]);
-  const [ollamaSendMode, setOllamaSendMode] = useState<'frame' | 'video'>(savedPreferences?.ollamaSendMode || 'frame');
+  const [ollamaSendMode, setOllamaSendMode] = useState<'frame' | 'video' | 'object_bulk' | 'object_sequential'>(savedPreferences?.ollamaSendMode || 'frame');
   const [importedTranscriptName, setImportedTranscriptName] = useState<string>('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editStartTime, setEditStartTime] = useState<string>('');
@@ -941,6 +941,7 @@ ${basePrompt}
         try {
             let chunkFile: UploadedFile | null = uploadedFile;
             let useChunkLocalTime = false;
+            let skipGenerateContent = false;
 
             // Gemini API + parçalı analiz: videoyu kes ve ayrı yükle
             if (currentAPIConfig.provider === APIProvider.GEMINI && chunkDuration !== 'all') {
@@ -992,6 +993,138 @@ ${basePrompt}
                     } catch (frameError) {
                       console.warn('Frame extraction also failed:', frameError);
                     }
+                  }
+                } else if (ollamaSendMode === 'object_bulk') {
+                  try {
+                    const frameTimes: number[] = [];
+                    const step = 0.5; // saniyede 2 kare
+                    for (let t = startTime; t < endTime; t += step) {
+                      frameTimes.push(t);
+                    }
+                    if (frameTimes[frameTimes.length - 1] < endTime - 0.1) {
+                      frameTimes.push(endTime);
+                    }
+                    
+                    setAnalysisProgress(
+                      `Parça ${i + 1}/${numChunks} kareler çıkarılıyor... (${frameTimes.length} kare)`
+                    );
+                    const { extractOllamaFramesAtTimes } = await import('./api');
+                    const extractedFrames = await extractOllamaFramesAtTimes(originalFile, frameTimes);
+                    if (cancelAnalysisRef.current) break;
+                    
+                    if (extractedFrames.length > 0) {
+                      chunkFile = {
+                        name: originalFile.name + `_bulk_${extractedFrames.length}.jpg`,
+                        data: extractedFrames[0].data,
+                        mimeType: 'image/jpeg',
+                        extraImages: extractedFrames.slice(1).map(f => f.data),
+                      };
+                      useChunkLocalTime = true;
+                      console.log(`Bulk prepared for Ollama chunk ${i + 1}: ${extractedFrames.length} frames`);
+                    }
+                  } catch (bulkError) {
+                    console.warn('Bulk extraction failed, falling back to frame:', bulkError);
+                  }
+                } else if (ollamaSendMode === 'object_sequential') {
+                  try {
+                    const frameTimes: number[] = [];
+                    const step = 0.5; // saniyede 2 kare
+                    for (let t = startTime; t < endTime; t += step) {
+                      frameTimes.push(t);
+                    }
+                    if (frameTimes[frameTimes.length - 1] < endTime - 0.1) {
+                      frameTimes.push(endTime);
+                    }
+                    
+                    setAnalysisProgress(
+                      `Parça ${i + 1}/${numChunks} kareler çıkarılıyor... (${frameTimes.length} kare)`
+                    );
+                    const { extractOllamaFramesAtTimes } = await import('./api');
+                    const extractedFrames = await extractOllamaFramesAtTimes(originalFile, frameTimes);
+                    if (cancelAnalysisRef.current) break;
+                    
+                    for (let f = 0; f < extractedFrames.length; f++) {
+                      if (cancelAnalysisRef.current) break;
+                      
+                      const frameTime = frameTimes[f];
+                      const frameFile = extractedFrames[f];
+                      const timeStr = formatSecondsToHHMMSS(frameTime);
+                      
+                      setAnalysisProgress(
+                        `Parça ${i + 1}/${numChunks}: Kare ${f + 1}/${extractedFrames.length} analiz ediliyor... (${timeStr})`
+                      );
+                      
+                      const customFramePrompt = `Videonun tam ${timeStr} anına ait olan tek bir kareyi (frame) analiz ediyorsun.
+
+Kullanıcı İsteği: ${basePrompt}
+
+ANALİZ TALİMATLARI (NESNE VE POZİSYON TESPİTİ):
+1. Bu kareyi detaylıca incele.
+2. Ekranda bulunan tüm önemli nesneleri, karakterleri, arayüz elemanlarını veya butonları tespit et.
+3. Her bir öğenin ekrandaki pozisyonunu detaylıca belirt (Örn: "Sol Üst", "Sağ Alt", "Ekranın Ortası", "Sol kenar").
+4. Analizini JSON formatında \`\`\`json ... \`\`\` blokları içinde ver.
+5. TÜM AÇIKLAMALAR VE METİNLER TÜRKÇE OLMALIDIR.
+
+Zaman kodlu analiz için BU FORMATI KULLAN (Zaman damgası tam olarak ${timeStr} olmalıdır):
+\`\`\`json
+{
+  "timecodes": [
+    {
+      "time": "${timeStr}",
+      "text": "NESNE ANALİZİ: [Öğe Adı] - [Ekrandaki Pozisyonu] (Örn: Kasklı avokado - Sol Alt, Puan tablosu - Sağ Üst)"
+    }
+  ]
+}
+\`\`\`
+
+Şimdi bu kareyi analiz et:`;
+                      
+                      try {
+                        const resp = await generateContent(customFramePrompt, functions, frameFile);
+                        lastDebugInfo = resp;
+                        let call = resp.functionCalls?.[0];
+                        let chunkTimecodes: any[] = [];
+                        
+                        if (call && call.args && Array.isArray(call.args.timecodes)) {
+                          chunkTimecodes = call.args.timecodes.map((tc: any) => ({
+                            time: timeStr,
+                            text: tc.text || tc.description || '',
+                            startTime: timeStr,
+                            endTime: formatSecondsToHHMMSS(frameTime + 0.5),
+                            category: 'nesne analizi',
+                            description: tc.text || tc.description || ''
+                          }));
+                        } else {
+                          try {
+                            const jsonMatch = resp.response.match(/```json\s*([\s\S]*?)\s*```/);
+                            if (jsonMatch) {
+                              const parsedData = JSON.parse(jsonMatch[1]);
+                              if (parsedData.timecodes && Array.isArray(parsedData.timecodes)) {
+                                chunkTimecodes = parsedData.timecodes.map((tc: any) => ({
+                                  time: timeStr,
+                                  text: tc.text || tc.description || '',
+                                  startTime: timeStr,
+                                  endTime: formatSecondsToHHMMSS(frameTime + 0.5),
+                                  category: 'nesne analizi',
+                                  description: tc.text || tc.description || ''
+                                }));
+                              }
+                            }
+                          } catch (parseErr) {
+                            console.warn('Metinden JSON ayıklanamadı:', parseErr);
+                          }
+                        }
+                        
+                        if (chunkTimecodes.length > 0) {
+                          allTimecodes = allTimecodes.concat(chunkTimecodes);
+                        }
+                      } catch (frameErr) {
+                        console.error(`Kare ${f + 1} analizinde hata:`, frameErr);
+                      }
+                    }
+                    skipGenerateContent = true;
+                  } catch (seqError) {
+                    console.warn('Sequential extraction failed, falling back to frame:', seqError);
                   }
                 } else {
                   // Frame modu: ortadaki frame'i gönder
@@ -1046,7 +1179,38 @@ ${basePrompt}
 
             // Eğer video kesildi ise, prompt'u chunk'ın yerel zamanına göre düzelt
             let finalPrompt = chunkPrompt;
-            if (useChunkLocalTime) {
+            if (ollamaSendMode === 'object_bulk' && chunkFile) {
+              const frameCount = (chunkFile as OllamaUploadedFile).extraImages ? ((chunkFile as OllamaUploadedFile).extraImages!.length + 1) : 1;
+              finalPrompt = `Bir video parçasından saniyede 2 kare (0.5 saniye aralıklarla) çıkarılmış ${frameCount} adet kareyi kronolojik sırayla analiz ediyorsun.
+
+Kullanıcı İsteği: ${basePrompt}
+
+ANALİZ TALİMATLARI (NESNE VE POZİSYON TESPİTİ):
+1. Gönderilen tüm kareleri sırayla dikkatle analiz et.
+2. Her karede ekranda bulunan tüm önemli öğeleri, nesneleri, karakterleri, butonları veya arayüz elemanlarını tespit et.
+3. Tespit ettiğin her öğenin ekrandaki yaklaşık pozisyonunu belirt (Örn: "Sol Üst", "Sağ Alt", "Merkez", "Sağ Orta" veya koordinat referansları).
+4. Zaman kodlu analizini JSON formatında \`\`\`json ... \`\`\` blokları içinde ver.
+5. TÜM AÇIKLAMALAR VE METİNLER TÜRKÇE OLMALIDIR.
+
+Zaman kodlu analiz için BU FORMATI KULLAN:
+\`\`\`json
+{
+  "timecodes": [
+    {
+      "time": "${formatSecondsToHHMMSS(startTime + 0.5)}",
+      "text": "NESNE ANALİZİ: [Öğe Adı] - [Ekrandaki Pozisyonu] (Örn: Sarı avokado - Sağ Üst, Ezme sarı yumruk - Merkez)"
+    }
+  ]
+}
+\`\`\`
+
+ÖNEMLİ NOT:
+- Analiz ettiğin kareler arasındaki nesne hareketlerini ve değişimleri detaylıca Türkçe olarak açıkla.
+- Zaman damgalarını SS:DD:SS formatında yaz (Zaman damgası mutlaka ${formatSecondsToHHMMSS(startTime)} ile ${formatSecondsToHHMMSS(endTime)} arasında olmalıdır).
+- TÜM AÇIKLAMALAR TÜRKÇE OLMALIDIR.
+
+Şimdi bu ${frameCount} kareyi analiz et:`;
+            } else if (useChunkLocalTime) {
               const chunkDur = endTime - startTime;
               finalPrompt = `Bu video parçası, orijinal videonun ${formatSecondsToHHMMSS(startTime)} - ${formatSecondsToHHMMSS(endTime)} arasındaki bölümüdür.
 Bu parçanın süresi: ${Math.round(chunkDur)} saniye.
@@ -1068,6 +1232,10 @@ ${firstRecordRuleInstruction}
 - TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi analizinle fonksiyonu çağır.`;
+            }
+
+            if (skipGenerateContent) {
+              continue;
             }
 
             setAnalysisProgress(
@@ -1101,23 +1269,55 @@ ${firstRecordRuleInstruction}
                     // Kategorik süreç transkripti modunda özel işleme
                     if (selectedMode === 'Kategorik Süreç Transkripti' && call.name === 'set_categorical_timecodes' && Array.isArray(call.args.categoricalTimecodes)) {
                         chunkTimecodes = call.args.categoricalTimecodes.filter((tc: any) => {
-                            const startSecs = timeToSecs(tc.startTime);
-                            const endSecs = timeToSecs(tc.endTime);
+                            const startSecs = timeToSecs(tc.startTime || tc.time);
+                            const endSecs = timeToSecs(tc.endTime || tc.time);
                             return startSecs >= startTime && endSecs <= endTime;
-                        }).map((tc: any) => ({
-                            time: tc.startTime,
-                            text: `[${tc.category}]: ${tc.description}`,
-                            startTime: tc.startTime,
-                            endTime: tc.endTime,
-                            category: tc.category,
-                            description: tc.description,
-                            location: tc.location
-                        }));
+                        }).map((tc: any) => {
+                            const startStr = tc.startTime || tc.time || "00:00:00";
+                            const endStr = tc.endTime || tc.time || startStr;
+                            const catDisplay = Array.isArray(tc.category) ? tc.category.join(', ') : (tc.category || '');
+                            
+                            let descText = tc.description || tc.text || '';
+                            let textVal = tc.text || '';
+                            if (!textVal) {
+                              textVal = catDisplay ? `[${catDisplay}]: ${descText}` : descText;
+                            }
+
+                            return {
+                                time: tc.startTime || tc.time || startStr,
+                                text: textVal,
+                                startTime: startStr,
+                                endTime: endStr,
+                                category: tc.category || '',
+                                description: descText,
+                                location: tc.location || ''
+                            };
+                        });
                     } else if (Array.isArray(call.args.timecodes)) {
                         // Normal fonksiyonlar için mevcut filtering
                         chunkTimecodes = call.args.timecodes.filter((tc: any) => {
-                            const tcSecs = timeToSecs(tc.time);
+                            const tcSecs = timeToSecs(tc.time || tc.startTime);
                             return tcSecs >= startTime && tcSecs < endTime;
+                        }).map((tc: any) => {
+                            const startStr = tc.startTime || tc.time || "00:00:00";
+                            const endStr = tc.endTime || tc.time || startStr;
+                            const catDisplay = Array.isArray(tc.category) ? tc.category.join(', ') : (tc.category || '');
+                            
+                            let descText = tc.description || tc.text || '';
+                            let textVal = tc.text || '';
+                            if (!textVal) {
+                              textVal = catDisplay ? `[${catDisplay}]: ${descText}` : descText;
+                            }
+
+                            return {
+                                time: tc.time || startStr,
+                                text: textVal,
+                                startTime: startStr,
+                                endTime: endStr,
+                                category: tc.category || '',
+                                description: descText,
+                                location: tc.location || ''
+                            };
                         });
                     } else {
                         console.error(`Invalid arguments for function call in chunk ${i+1}:`, call.args);
@@ -1373,6 +1573,7 @@ ${basePrompt}
       try {
         let chunkFile: UploadedFile | null = file;
         let useChunkLocalTime = false;
+        let skipGenerateContent = false;
 
         // Gemini API: videoyu kes ve ayrı yükle
         if (currentAPIConfig.provider === APIProvider.GEMINI) {
@@ -1421,6 +1622,137 @@ ${basePrompt}
                 } catch (frameError) {
                   console.warn('Frame extraction failed for reanalysis:', frameError);
                 }
+              }
+            } else if (ollamaSendMode === 'object_bulk') {
+              try {
+                const frameTimes: number[] = [];
+                const step = 0.5; // saniyede 2 kare
+                for (let t = chunkStart; t < chunkEnd; t += step) {
+                  frameTimes.push(t);
+                }
+                if (frameTimes[frameTimes.length - 1] < chunkEnd - 0.1) {
+                  frameTimes.push(chunkEnd);
+                }
+                
+                setAnalysisProgress(
+                  `Parça ${i + 1}/${numChunks} kareler çıkarılıyor... (${frameTimes.length} kare)`
+                );
+                const { extractOllamaFramesAtTimes } = await import('./api');
+                const extractedFrames = await extractOllamaFramesAtTimes(originalFile, frameTimes);
+                if (cancelAnalysisRef.current) break;
+                
+                if (extractedFrames.length > 0) {
+                  chunkFile = {
+                    name: originalFile.name + `_re_bulk_${extractedFrames.length}.jpg`,
+                    data: extractedFrames[0].data,
+                    mimeType: 'image/jpeg',
+                    extraImages: extractedFrames.slice(1).map(f => f.data),
+                  };
+                  useChunkLocalTime = true;
+                  console.log(`Reanalysis Bulk prepared for Ollama chunk ${i + 1}: ${extractedFrames.length} frames`);
+                }
+              } catch (bulkError) {
+                console.warn('Bulk extraction failed for reanalysis, falling back to frame:', bulkError);
+              }
+            } else if (ollamaSendMode === 'object_sequential') {
+              try {
+                const frameTimes: number[] = [];
+                const step = 0.5; // saniyede 2 kare
+                for (let t = chunkStart; t < chunkEnd; t += step) {
+                  frameTimes.push(t);
+                }
+                if (frameTimes[frameTimes.length - 1] < chunkEnd - 0.1) {
+                  frameTimes.push(chunkEnd);
+                }
+                
+                setAnalysisProgress(
+                  `Parça ${i + 1}/${numChunks} kareler çıkarılıyor... (${frameTimes.length} kare)`
+                );
+                const { extractOllamaFramesAtTimes } = await import('./api');
+                const extractedFrames = await extractOllamaFramesAtTimes(originalFile, frameTimes);
+                if (cancelAnalysisRef.current) break;
+                
+                for (let f = 0; f < extractedFrames.length; f++) {
+                  if (cancelAnalysisRef.current) break;
+                  
+                  const frameTime = frameTimes[f];
+                  const frameFile = extractedFrames[f];
+                  const timeStr = formatSecondsToHHMMSS(frameTime);
+                  
+                  setAnalysisProgress(
+                    `Parça ${i + 1}/${numChunks}: Kare ${f + 1}/${extractedFrames.length} yeniden analiz ediliyor... (${timeStr})`
+                  );
+                  
+                  const customFramePrompt = `Videonun tam ${timeStr} anına ait olan tek bir kareyi (frame) analiz ediyorsun.
+
+Kullanıcı İsteği: ${basePrompt}
+
+ANALİZ TALİMATLARI (NESNE VE POZİSYON TESPİTİ):
+1. Bu kareyi detaylıca incele.
+2. Ekranda bulunan tüm önemli nesneleri, karakterleri, arayüz elemanlarını veya butonları tespit et.
+3. Her bir öğenin ekrandaki pozisyonunu detaylıca belirt (Örn: "Sol Üst", "Sağ Alt", "Ekranın Ortası", "Sol kenar").
+4. Analizini JSON formatında \`\`\`json ... \`\`\` blokları içinde ver.
+5. TÜM AÇIKLAMALAR VE METİNLER TÜRKÇE OLMALIDIR.
+
+Zaman kodlu analiz için BU FORMATI KULLAN (Zaman damgası tam olarak ${timeStr} olmalıdır):
+\`\`\`json
+{
+  "timecodes": [
+    {
+      "time": "${timeStr}",
+      "text": "NESNE ANALİZİ: [Öğe Adı] - [Ekrandaki Pozisyonu] (Örn: Kasklı avokado - Sol Alt, Puan tablosu - Sağ Üst)"
+    }
+  ]
+}
+\`\`\`
+
+Şimdi bu kareyi analiz et:`;
+                  
+                  try {
+                    const resp = await generateContent(customFramePrompt, functions, frameFile);
+                    let call = resp.functionCalls?.[0];
+                    let chunkTimecodes: any[] = [];
+                    
+                    if (call && call.args && Array.isArray(call.args.timecodes)) {
+                      chunkTimecodes = call.args.timecodes.map((tc: any) => ({
+                        time: timeStr,
+                        text: tc.text || tc.description || '',
+                        startTime: timeStr,
+                        endTime: formatSecondsToHHMMSS(frameTime + 0.5),
+                        category: 'nesne analizi',
+                        description: tc.text || tc.description || ''
+                      }));
+                    } else {
+                      try {
+                        const jsonMatch = resp.response.match(/```json\s*([\s\S]*?)\s*```/);
+                        if (jsonMatch) {
+                          const parsedData = JSON.parse(jsonMatch[1]);
+                          if (parsedData.timecodes && Array.isArray(parsedData.timecodes)) {
+                            chunkTimecodes = parsedData.timecodes.map((tc: any) => ({
+                              time: timeStr,
+                              text: tc.text || tc.description || '',
+                              startTime: timeStr,
+                              endTime: formatSecondsToHHMMSS(frameTime + 0.5),
+                              category: 'nesne analizi',
+                              description: tc.text || tc.description || ''
+                            }));
+                          }
+                        }
+                      } catch (parseErr) {
+                        console.warn('Metinden JSON ayıklanamadı:', parseErr);
+                      }
+                    }
+                    
+                    if (chunkTimecodes.length > 0) {
+                      reanalysisTimecodes = reanalysisTimecodes.concat(chunkTimecodes);
+                    }
+                  } catch (frameErr) {
+                    console.error(`Kare ${f + 1} analizinde hata (reanalysis):`, frameErr);
+                  }
+                }
+                skipGenerateContent = true;
+              } catch (seqError) {
+                console.warn('Sequential extraction failed for reanalysis, falling back to frame:', seqError);
               }
             } else {
               // Frame modu
@@ -1474,7 +1806,38 @@ ${basePrompt}
 
         // Eğer video kesildi ise, prompt'u güncelle
         let finalPrompt = chunkPrompt;
-        if (useChunkLocalTime) {
+        if (ollamaSendMode === 'object_bulk' && chunkFile) {
+          const frameCount = (chunkFile as OllamaUploadedFile).extraImages ? ((chunkFile as OllamaUploadedFile).extraImages!.length + 1) : 1;
+          finalPrompt = `Bir video parçasından saniyede 2 kare (0.5 saniye aralıklarla) çıkarılmış ${frameCount} adet kareyi kronolojik sırayla analiz ediyorsun.
+
+Kullanıcı İsteği: ${basePrompt}
+
+ANALİZ TALİMATLARI (NESNE VE POZİSYON TESPİTİ):
+1. Gönderilen tüm kareleri sırayla dikkatle analiz et.
+2. Her karede ekranda bulunan tüm önemli öğeleri, nesneleri, karakterleri, butonları veya arayüz elemanlarını tespit et.
+3. Tespit ettiğin her öğenin ekrandaki yaklaşık pozisyonunu belirt (Örn: "Sol Üst", "Sağ Alt", "Merkez", "Sağ Orta" veya koordinat referansları).
+4. Zaman kodlu analizini JSON formatında \`\`\`json ... \`\`\` blokları içinde ver.
+5. TÜM AÇIKLAMALAR VE METİNLER TÜRKÇE OLMALIDIR.
+
+Zaman kodlu analiz için BU FORMATI KULLAN:
+\`\`\`json
+{
+  "timecodes": [
+    {
+      "time": "${formatSecondsToHHMMSS(chunkStart + 0.5)}",
+      "text": "NESNE ANALİZİ: [Öğe Adı] - [Ekrandaki Pozisyonu] (Örn: Sarı avokado - Sağ Üst, Ezme sarı yumruk - Merkez)"
+    }
+  ]
+}
+\`\`\`
+
+ÖNEMLİ NOT:
+- Analiz ettiğin kareler arasındaki nesne hareketlerini ve değişimleri detaylıca Türkçe olarak açıkla.
+- Zaman damgalarını SS:DD:SS formatında yaz (Zaman damgası mutlaka ${formatSecondsToHHMMSS(chunkStart)} ile ${formatSecondsToHHMMSS(chunkEnd)} arasında olmalıdır).
+- TÜM AÇIKLAMALAR TÜRKÇE OLMALIDIR.
+
+Şimdi bu ${frameCount} kareyi analiz et:`;
+        } else if (useChunkLocalTime) {
           const chunkDur = chunkEnd - chunkStart;
           finalPrompt = `Bu video parçası, orijinal videonun ${formatSecondsToHHMMSS(chunkStart)} - ${formatSecondsToHHMMSS(chunkEnd)} arasındaki bölümüdür.
 Bu parçanın süresi: ${Math.round(chunkDur)} saniye.
@@ -1495,6 +1858,10 @@ ${basePrompt}
 - TÜM SONUÇLAR TÜRKÇE OLMALIDIR.
 
 Şimdi detaylı analizinle fonksiyonu çağır.`;
+        }
+
+        if (skipGenerateContent) {
+          continue;
         }
 
         setAnalysisProgress(
@@ -1518,29 +1885,58 @@ ${basePrompt}
         if (call && call.args) {
           if (call.name === "set_categorical_timecodes" && Array.isArray(call.args.categoricalTimecodes)) {
             const chunkCategoricalTimecodes = call.args.categoricalTimecodes.filter((ctc: any) => {
-              const startSecs = timeToSecs(ctc.startTime);
-              const endSecs = timeToSecs(ctc.endTime);
+              const startSecs = timeToSecs(ctc.startTime || ctc.time);
+              const endSecs = timeToSecs(ctc.endTime || ctc.time);
               return (startSecs >= chunkStart && startSecs <= chunkEnd) || 
                      (endSecs >= chunkStart && endSecs <= chunkEnd) ||
                      (startSecs <= chunkStart && endSecs >= chunkEnd);
             });
             // Kategorik verilerin tam yapısını koru (startTime, endTime, category, description, location, text)
             reanalysisTimecodes = reanalysisTimecodes.concat(chunkCategoricalTimecodes.map((ctc: any) => {
-              const categoryDisplay = Array.isArray(ctc.category) ? ctc.category.join(', ') : ctc.category;
+              const startStr = ctc.startTime || ctc.time || "00:00:00";
+              const endStr = ctc.endTime || ctc.time || startStr;
+              const categoryDisplay = Array.isArray(ctc.category) ? ctc.category.join(', ') : (ctc.category || '');
+              
+              let descText = ctc.description || ctc.text || '';
+              let textVal = ctc.text || '';
+              if (!textVal) {
+                textVal = categoryDisplay ? `[${categoryDisplay}]: ${descText}` : descText;
+              }
+
               return {
-                time: ctc.startTime,
-                text: `[${categoryDisplay}]: ${ctc.description}`,
-                startTime: ctc.startTime,
-                endTime: ctc.endTime,
-                category: ctc.category,
-                description: ctc.description,
-                location: ctc.location
+                time: ctc.startTime || ctc.time || startStr,
+                text: textVal,
+                startTime: startStr,
+                endTime: endStr,
+                category: ctc.category || '',
+                description: descText,
+                location: ctc.location || ''
               };
             }));
           } else if (Array.isArray(call.args.timecodes)) {
             const chunkTimecodes = call.args.timecodes.filter((tc: any) => {
-              const tcSecs = timeToSecs(tc.time);
+              const tcSecs = timeToSecs(tc.time || tc.startTime);
               return tcSecs >= chunkStart && tcSecs <= chunkEnd;
+            }).map((tc: any) => {
+              const startStr = tc.startTime || tc.time || "00:00:00";
+              const endStr = tc.endTime || tc.time || startStr;
+              const catDisplay = Array.isArray(tc.category) ? tc.category.join(', ') : (tc.category || '');
+              
+              let descText = tc.description || tc.text || '';
+              let textVal = tc.text || '';
+              if (!textVal) {
+                textVal = catDisplay ? `[${catDisplay}]: ${descText}` : descText;
+              }
+
+              return {
+                time: tc.time || startStr,
+                text: textVal,
+                startTime: startStr,
+                endTime: endStr,
+                category: tc.category || '',
+                description: descText,
+                location: tc.location || ''
+              };
             });
             reanalysisTimecodes = reanalysisTimecodes.concat(chunkTimecodes);
           }
@@ -2143,7 +2539,9 @@ ${basePrompt}
                   Görüntü Gönderim Modu
                 </label>
                 <p className="setting-description">
-                  AI'ya her parça için tek bir kare mi yoksa çoklu kare mi gönderilsin?
+                  {currentAPIConfig.provider === APIProvider.OLLAMA 
+                    ? "Ollama için görsel gönderim sıklığını ve nesne/konum analiz derinliğini seçin."
+                    : "AI'ya her parça için tek bir kare mi yoksa çoklu kare mi gönderilsin?"}
                 </p>
                 <div className="chunk-duration-options">
                   <button
@@ -2160,12 +2558,34 @@ ${basePrompt}
                     <strong>🎬 Çoklu Kare</strong>
                     <span>Detaylı, yüksek bellek</span>
                   </button>
+                  {currentAPIConfig.provider === APIProvider.OLLAMA && (
+                    <>
+                      <button
+                        className={c('chunk-option', { active: ollamaSendMode === 'object_bulk' })}
+                        onClick={() => setOllamaSendMode('object_bulk')}
+                      >
+                        <strong>🔍 Nesne (Toplu 2 FPS)</strong>
+                        <span>Toplu gönderim</span>
+                      </button>
+                      <button
+                        className={c('chunk-option', { active: ollamaSendMode === 'object_sequential' })}
+                        onClick={() => setOllamaSendMode('object_sequential')}
+                      >
+                        <strong>🔄 Nesne (Sıralı 2 FPS)</strong>
+                        <span>Kararlı kare kare</span>
+                      </button>
+                    </>
+                  )}
                 </div>
                 <div className="chunk-info">
                   {ollamaSendMode === 'frame' ? (
                     <p>🖼️ Her parçanın ortasından tek bir kare çıkarılıp gönderilecek (hızlı, tüm modeller destekler)</p>
-                  ) : (
+                  ) : ollamaSendMode === 'video' ? (
                     <p>🎬 Her parçadan çoklu kare çıkarılıp birlikte gönderilecek (daha detaylı analiz, daha yavaş)</p>
+                  ) : ollamaSendMode === 'object_bulk' ? (
+                    <p>🔍 Saniyede 2 kare (0.5s aralıklarla) çıkarılır ve tek bir API isteğinde Ollama'ya toplu olarak gönderilir (yüksek bellek tüketebilir!).</p>
+                  ) : (
+                    <p>🔄 Saniyede 2 kare (0.5s aralıklarla) çıkarılır ve tek tek sıralı API istekleriyle analiz edilir (en yüksek doğruluk ve kararlılık!).</p>
                   )}
                 </div>
               </div>

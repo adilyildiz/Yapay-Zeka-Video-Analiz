@@ -155,7 +155,7 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
           </label>
           <p className="form-help">Video analizi için kullanılacak AI servisini seçin</p>
           <div className="radio-group">
-            <div className="radio-option">
+            <div className="radio-option" onClick={() => handleProviderChange(APIProvider.GEMINI)} style={{ cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="provider"
@@ -169,7 +169,7 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
                 <p>Güçlü video analizi ve transkripsiyon yetenekleri</p>
               </div>
             </div>
-            <div className="radio-option">
+            <div className="radio-option" onClick={() => handleProviderChange(APIProvider.OLLAMA)} style={{ cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="provider"
@@ -183,7 +183,7 @@ export default function APISettings({ isOpen, onClose, onConfigChange }: APISett
                 <p>Yerel çalışan görsel AI modelleri (llava, moondream)</p>
               </div>
             </div>
-            <div className="radio-option">
+            <div className="radio-option" onClick={() => handleProviderChange(APIProvider.OPENAI)} style={{ cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="provider"

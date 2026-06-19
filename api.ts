@@ -110,7 +110,36 @@ let geminiClient = new GoogleGenAI({apiKey: currentConfig.gemini?.apiKey || ''})
 let ollamaClient: OllamaAPI | null = null;
 let openaiClient: OpenAIAPI | null = null;
 
-export type UploadedFile = GeminiFile | OllamaUploadedFile | OpenAIUploadedFile;
+// Inline base64 ile gönderilen dosya tipi (Files API başarısız olursa kullanılır)
+export interface InlineUploadedFile {
+  inlineData: {
+    mimeType: string;
+    data: string; // base64
+  };
+  mimeType: string;
+  name: string;
+}
+
+export function isInlineUploadedFile(file: UploadedFile): file is InlineUploadedFile {
+  return 'inlineData' in file;
+}
+
+// Tarayıcı File nesnesini base64 string'e dönüştürür
+function fileToBase64(file: globalThis.File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // data:video/mp4;base64,XXXX formatından sadece base64 kısmını al
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export type UploadedFile = GeminiFile | OllamaUploadedFile | OpenAIUploadedFile | InlineUploadedFile;
 
 // API konfigürasyonunu güncelleme fonksiyonu
 export function updateAPIConfig(config: APIConfig, persist = true) {
@@ -206,12 +235,19 @@ async function generateContent(
             role: 'user',
             parts: [
               {text},
-              {
-                fileData: {
-                  mimeType: file.mimeType,
-                  fileUri: (file as GeminiFile).uri,
-                },
-              },
+              isInlineUploadedFile(file)
+                ? {
+                    inlineData: {
+                      mimeType: (file as InlineUploadedFile).inlineData.mimeType,
+                      data: (file as InlineUploadedFile).inlineData.data,
+                    },
+                  }
+                : {
+                    fileData: {
+                      mimeType: file.mimeType,
+                      fileUri: (file as GeminiFile).uri,
+                    },
+                  },
             ],
           },
         ],
@@ -263,12 +299,35 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
     console.log('File processed for OpenAI.');
     return uploadedFile;
   } else {
-    // Gemini API — önce tarayıcı tarafı denenir, başarısız olursa sunucu proxy'ye düşer
+    // Gemini API — sıra: 1) inline base64, 2) tarayıcı Files API, 3) sunucu proxy
     const apiKey = currentConfig.gemini!.apiKey;
+    const INLINE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 
-    // 1. Tarayıcı taraflı doğrudan upload denemesi
+    // 1. Inline base64 denemesi (dosya <= 20MB ise)
+    if (file.size <= INLINE_MAX_SIZE) {
+      try {
+        console.log(`Inline base64 gönderim deneniyor (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+        const base64Data = await fileToBase64(file);
+        const inlineFile: InlineUploadedFile = {
+          inlineData: {
+            mimeType: file.type,
+            data: base64Data,
+          },
+          mimeType: file.type,
+          name: file.name,
+        };
+        console.log('Done (inline base64)');
+        return inlineFile;
+      } catch (inlineError) {
+        console.warn('Inline base64 gönderim başarısız:', inlineError);
+      }
+    } else {
+      console.log(`Dosya boyutu (${(file.size / 1024 / 1024).toFixed(1)}MB) inline limit (20MB) üzerinde, atlanıyor.`);
+    }
+
+    // 2. Tarayıcı taraflı Files API denemesi
     try {
-      console.log('Uploading to Gemini (browser-side)...');
+      console.log('Uploading to Gemini (browser-side Files API)...');
       const blob = new Blob([file], { type: file.type });
       const uploadedFile = await geminiClient.files.upload({
         file: blob,
@@ -284,32 +343,33 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
       if (getFile.state === 'FAILED') {
         throw new Error('File processing failed.');
       }
-      console.log('Done (browser-side)');
+      console.log('Done (browser-side Files API)');
       return getFile;
     } catch (browserError) {
-      // 2. CORS veya başka bir hata → sunucu proxy'ye düş
-      console.warn('Tarayıcı taraflı upload başarısız, sunucu proxy deneniyor:', browserError);
-
-      const arrayBuffer = await file.arrayBuffer();
-      const response = await fetch('/api/gemini-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': file.type,
-          'X-Gemini-Api-Key': apiKey,
-          'X-Filename': encodeURIComponent(file.name),
-        },
-        body: arrayBuffer,
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(`Gemini upload başarısız: ${err.error}`);
-      }
-
-      const uploadedFile = await response.json();
-      console.log('Done (server proxy)');
-      return uploadedFile;
+      console.warn('Tarayıcı taraflı Files API başarısız:', browserError);
     }
+
+    // 3. Sunucu proxy'ye düş
+    console.warn('Sunucu proxy deneniyor...');
+    const arrayBuffer = await file.arrayBuffer();
+    const response = await fetch('/api/gemini-upload', {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type,
+        'X-Gemini-Api-Key': apiKey,
+        'X-Filename': encodeURIComponent(file.name),
+      },
+      body: arrayBuffer,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(`Gemini upload başarısız: ${err.error}`);
+    }
+
+    const uploadedFile = await response.json();
+    console.log('Done (server proxy)');
+    return uploadedFile;
   }
 }
 
@@ -374,6 +434,18 @@ export async function extractOllamaFrameAtTime(file: globalThis.File, timeInSeco
   }
   
   return await ollamaClient.extractFrameAtTime(file, timeInSeconds);
+}
+
+// Ollama için çoklu kare çıkarma (belirli zamanlarda)
+export async function extractOllamaFramesAtTimes(file: globalThis.File, times: number[]): Promise<OllamaUploadedFile[]> {
+  if (!ollamaClient) {
+    if (!currentConfig.ollama) {
+      throw new Error('Ollama configuration not found');
+    }
+    ollamaClient = new OllamaAPI(currentConfig.ollama);
+  }
+  
+  return await ollamaClient.extractFramesAtTimes(file, times);
 }
 
 // Ollama için video segmenti hazırlama (kesilmiş video parçası gönderimi)

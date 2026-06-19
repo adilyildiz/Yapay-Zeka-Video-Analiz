@@ -28,6 +28,10 @@ class OllamaAPI {
   }
 
   private optimizePromptForOllama(text: string): string {
+    // Zaten optimize edilmiş veya özel bir nesne promptu ise olduğu gibi bırak
+    if (text.includes("ANALİZ TALİMATLARI")) {
+      return text;
+    }
     // Ollama için prompt optimizasyonu - video frame analizi
     const structuredPrompt = `Videodan çıkarılmış bir frame'i analiz ediyorsun. Bu görüntü videodaki bir anı temsil ediyor.
 
@@ -115,10 +119,20 @@ Zaman kodlu analiz için bu formatı kullan:
         const jsonMatch = data.response.match(/```json\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
           const parsedData = JSON.parse(jsonMatch[1]);
-          if (parsedData.timecodes) {
+          if (parsedData.categoricalTimecodes) {
+            functionCalls = [{
+              name: 'set_categorical_timecodes',
+              args: parsedData
+            }];
+          } else if (parsedData.timecodes) {
             functionCalls = [{
               name: 'set_timecodes',
               args: parsedData
+            }];
+          } else if (Array.isArray(parsedData)) {
+            functionCalls = [{
+              name: 'set_timecodes',
+              args: { timecodes: parsedData }
             }];
           }
         }
@@ -293,7 +307,7 @@ Zaman kodlu analiz için bu formatı kullan:
       const allImages = [file.data, ...(file.extraImages || [])];
       const frameCount = allImages.length;
 
-      const optimizedPrompt = `Bir video parçasından eşit aralıklarla çıkarılmış ${frameCount} kareyi analiz ediyorsun. Bu kareler videoyu kronolojik sırayla temsil eder.
+      const optimizedPrompt = text.includes("ANALİZ TALİMATLARI") ? text : `Bir video parçasından eşit aralıklarla çıkarılmış ${frameCount} kareyi analiz ediyorsun. Bu kareler videoyu kronolojik sırayla temsil eder.
 
 Kullanıcı İsteği: ${text}
 
@@ -363,10 +377,20 @@ Zaman kodlu analiz için bu formatı kullan:
         const jsonMatch = data.response.match(/```json\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
           const parsedData = JSON.parse(jsonMatch[1]);
-          if (parsedData.timecodes) {
+          if (parsedData.categoricalTimecodes) {
+            functionCalls = [{
+              name: 'set_categorical_timecodes',
+              args: parsedData
+            }];
+          } else if (parsedData.timecodes) {
             functionCalls = [{
               name: 'set_timecodes',
               args: parsedData
+            }];
+          } else if (Array.isArray(parsedData)) {
+            functionCalls = [{
+              name: 'set_timecodes',
+              args: { timecodes: parsedData }
             }];
           }
         }
@@ -407,6 +431,114 @@ Zaman kodlu analiz için bu formatı kullan:
     } catch {
       return [];
     }
+  }
+
+  getObjectBulkPrompt(text: string, frameCount: number): string {
+    return `Bir video parçasından saniyede 2 kare (0.5 saniye aralıklarla) çıkarılmış ${frameCount} adet kareyi kronolojik sırayla analiz ediyorsun.
+
+Kullanıcı İsteği: ${text}
+
+ANALİZ TALİMATLARI (NESNE VE POZİSYON TESPİTİ):
+1. Gönderilen tüm kareleri sırayla dikkatle analiz et.
+2. Her karede ekranda bulunan tüm önemli öğeleri, nesneleri, karakterleri, butonları veya arayüz elemanlarını tespit et.
+3. Tespit ettiğin her öğenin ekrandaki yaklaşık pozisyonunu belirt (Örn: "Sol Üst", "Sağ Alt", "Merkez", "Sağ Orta" veya koordinat referansları).
+4. Zaman kodlu analizini JSON formatında \`\`\`json ... \`\`\` blokları içinde ver.
+5. TÜM AÇIKLAMALAR VE METİNLER TÜRKÇE OLMALIDIR.
+
+Zaman kodlu analiz için BU FORMATI KULLAN:
+\`\`\`json
+{
+  "timecodes": [
+    {
+      "time": "00:01:30",
+      "text": "NESNE ANALİZİ: [Öğe Adı] - [Ekrandaki Pozisyonu] (Örn: Sarı avokado - Sağ Üst, Ezme sarı yumruk - Merkez)"
+    }
+  ]
+}
+\`\`\`
+
+ÖNEMLİ NOT:
+- Analiz ettiğin kareler arasındaki nesne hareketlerini ve değişimleri detaylıca Türkçe olarak açıkla.
+- Zaman damgalarını SS:DD:SS formatında yaz.
+- TÜM AÇIKLAMALAR TÜRKÇE OLMALIDIR.
+
+Şimdi bu ${frameCount} kareyi analiz et:`;
+  }
+
+  getObjectSequentialPrompt(text: string, timeStr: string): string {
+    return `Videonun tam ${timeStr} anına ait olan tek bir kareyi (frame) analiz ediyorsun.
+
+Kullanıcı İsteği: ${text}
+
+ANALİZ TALİMATLARI (NESNE VE POZİSYON TESPİTİ):
+1. Bu kareyi detaylıca incele.
+2. Ekranda bulunan tüm önemli nesneleri, karakterleri, arayüz elemanlarını veya butonları tespit et.
+3. Her bir öğenin ekrandaki pozisyonunu detaylıca belirt (Örn: "Sol Üst", "Sağ Alt", "Ekranın Ortası", "Sol kenar").
+4. Analizini JSON formatında \`\`\`json ... \`\`\` blokları içinde ver.
+5. TÜM AÇIKLAMALAR VE METİNLER TÜRKÇE OLMALIDIR.
+
+Zaman kodlu analiz için BU FORMATI KULLAN (Zaman damgası tam olarak ${timeStr} olmalıdır):
+\`\`\`json
+{
+  "timecodes": [
+    {
+      "time": "${timeStr}",
+      "text": "NESNE ANALİZİ: [Öğe Adı] - [Ekrandaki Pozisyonu] (Örn: Kasklı avokado - Sol Alt, Puan tablosu - Sağ Üst)"
+    }
+  ]
+}
+\`\`\`
+
+Şimdi bu kareyi analiz et:`;
+  }
+
+  async extractFramesAtTimes(file: globalThis.File, times: number[]): Promise<OllamaUploadedFile[]> {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context not available'));
+      
+      const results: OllamaUploadedFile[] = [];
+      let currentIndex = 0;
+      
+      video.onloadedmetadata = () => {
+        canvas.width = Math.min(video.videoWidth, 854); // Optimize: Nesne analizi için 854x480 (480p) yeterli ve hızlıdır
+        canvas.height = Math.min(video.videoHeight, 480);
+        seekNext();
+      };
+      
+      const seekNext = () => {
+        if (currentIndex >= times.length) {
+          URL.revokeObjectURL(video.src);
+          resolve(results);
+          return;
+        }
+        const targetTime = Math.min(times[currentIndex], video.duration - 0.1);
+        video.currentTime = targetTime;
+      };
+      
+      video.onseeked = () => {
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const base64Data = canvas.toDataURL('image/jpeg', 0.75); // Optimize kalite
+          const base64 = base64Data.split(',')[1];
+          results.push({
+            name: `${file.name}_frame_${Math.round(times[currentIndex] * 10) / 10}s.jpg`,
+            data: base64,
+            mimeType: 'image/jpeg',
+          });
+          currentIndex++;
+          seekNext();
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      video.onerror = () => reject(new Error('Video loading failed for frame extraction'));
+      video.src = URL.createObjectURL(file);
+      video.load();
+    });
   }
 }
 
