@@ -303,8 +303,11 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
     const apiKey = currentConfig.gemini!.apiKey;
     const INLINE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 
-    // 1. Inline base64 denemesi (dosya <= 20MB ise)
-    if (file.size <= INLINE_MAX_SIZE) {
+    const isVideo = file.type.startsWith('video/');
+
+    // 1. Inline base64 denemesi (video değilse ve dosya <= 20MB ise)
+    //    Gemini API, video dosyalarını inline olarak desteklemez — Files API gerektirir
+    if (!isVideo && file.size <= INLINE_MAX_SIZE) {
       try {
         console.log(`Inline base64 gönderim deneniyor (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
         const base64Data = await fileToBase64(file);
@@ -321,6 +324,8 @@ async function uploadFile(file: globalThis.File): Promise<UploadedFile> {
       } catch (inlineError) {
         console.warn('Inline base64 gönderim başarısız:', inlineError);
       }
+    } else if (isVideo) {
+      console.log('Video dosyası tespit edildi, inline atlanıyor (Gemini video için Files API gerektirir).');
     } else {
       console.log(`Dosya boyutu (${(file.size / 1024 / 1024).toFixed(1)}MB) inline limit (20MB) üzerinde, atlanıyor.`);
     }

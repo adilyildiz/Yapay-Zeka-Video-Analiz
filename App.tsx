@@ -871,6 +871,7 @@ export default function App() {
 
     let previousChunkSummary = '';
     const useCrossChunkContext = initialScanContextMode === 'contextual';
+    let fullVideoFallbackFile: UploadedFile | null = null; // Chunk kesme başarısız olursa tam video yedek
 
     for (let i = 0; i < numChunks; i++) {
         // İptal kontrolü
@@ -962,8 +963,23 @@ ${basePrompt}
                   useChunkLocalTime = true;
                   console.log(`Video chunk ${i + 1} Gemini'ye yüklendi`);
                 } catch (sliceError) {
-                  console.warn('Video kesme başarısız, tam video kullanılacak:', sliceError);
-                  // Kesme başarısızsa orijinal dosyayı kullan
+                  console.warn('Video kesme başarısız, tam video yedek kullanılacak:', sliceError);
+                  // Tam videoyu bir kez yükle ve sonraki başarısız chunk'lar için yeniden kullan
+                  if (!fullVideoFallbackFile) {
+                    try {
+                      setAnalysisProgress(
+                        `Parça ${i + 1}/${numChunks}: Chunk kesme başarısız, tam video yükleniyor...`
+                      );
+                      fullVideoFallbackFile = await uploadFile(originalFile);
+                      console.log('Tam video Gemini\'ye yüklendi (fallback)');
+                    } catch (uploadError) {
+                      console.error('Tam video yükleme de başarısız:', uploadError);
+                    }
+                  }
+                  if (fullVideoFallbackFile) {
+                    chunkFile = fullVideoFallbackFile;
+                    // useChunkLocalTime false kalır — mutlak zaman promptu kullanılır
+                  }
                 }
               }
             }
@@ -1537,6 +1553,7 @@ ${contextAfter.map(formatEventForContext).join('\n')}
       ? 'set_categorical_timecodes fonksiyonunu sonuçlarla çağır.'
       : 'set_timecodes fonksiyonunu sonuçlarla çağır.';
 
+    let reanalysisFullVideoFallback: UploadedFile | null = null; // Reanalysis chunk kesme başarısız olursa tam video yedek
     for (let i = 0; i < numChunks; i++) {
       if (cancelAnalysisRef.current) break;
 
@@ -1593,7 +1610,21 @@ ${basePrompt}
               if (cancelAnalysisRef.current) break;
               useChunkLocalTime = true;
             } catch (sliceError) {
-              console.warn('Video kesme başarısız (reanalysis), tam video kullanılacak:', sliceError);
+              console.warn('Video kesme başarısız (reanalysis), tam video yedek kullanılacak:', sliceError);
+              if (!reanalysisFullVideoFallback) {
+                try {
+                  setAnalysisProgress(
+                    `Parça ${i + 1}/${numChunks}: Chunk kesme başarısız, tam video yükleniyor...`
+                  );
+                  reanalysisFullVideoFallback = await uploadFile(originalFile);
+                  console.log('Tam video Gemini\'ye yüklendi (reanalysis fallback)');
+                } catch (uploadError) {
+                  console.error('Tam video yükleme de başarısız (reanalysis):', uploadError);
+                }
+              }
+              if (reanalysisFullVideoFallback) {
+                chunkFile = reanalysisFullVideoFallback;
+              }
             }
           }
         }

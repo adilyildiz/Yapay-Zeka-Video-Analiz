@@ -136,55 +136,87 @@ export async function sliceVideo(
   const inputName = 'input' + (file.name.substring(file.name.lastIndexOf('.')) || '.mp4');
   const outputName = `chunk_${startSecs}_${endSecs}.mp4`;
 
-  // Dosyayı FFmpeg sanal dosya sistemine yaz
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
+  try {
+    // Dosyayı FFmpeg sanal dosya sistemine yaz
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-  const duration = endSecs - startSecs;
-  const fps = options.fps && options.fps > 0 ? Math.floor(options.fps) : null;
-  const height = options.height && options.height > 0 ? Math.floor(options.height) : null;
+    const duration = endSecs - startSecs;
+    const fps = options.fps && options.fps > 0 ? Math.floor(options.fps) : null;
+    const height = options.height && options.height > 0 ? Math.floor(options.height) : null;
 
-  if (!fps && !height) {
-    await ffmpeg.exec([
-      '-ss', startSecs.toString(),
-      '-i', inputName,
-      '-t', duration.toString(),
-      '-c', 'copy',
-      '-avoid_negative_ts', 'make_zero',
-      outputName,
-    ]);
-  } else {
-    const filters: string[] = [];
+    if (!fps && !height) {
+      await ffmpeg.exec([
+        '-ss', startSecs.toString(),
+        '-i', inputName,
+        '-t', duration.toString(),
+        '-c', 'copy',
+        '-avoid_negative_ts', 'make_zero',
+        outputName,
+      ]);
+    } else {
+      const filters: string[] = [];
 
-    if (fps) {
-      filters.push(`fps=${fps}`);
+      if (fps) {
+        filters.push(`fps=${fps}`);
+      }
+
+      if (height) {
+        filters.push(`scale=-2:${height}:force_original_aspect_ratio=decrease`);
+      }
+
+      const command = [
+        '-ss', startSecs.toString(),
+        '-i', inputName,
+        '-t', duration.toString(),
+        '-vf', filters.join(','),
+      ];
+
+      if (fps) {
+        command.push('-r', fps.toString());
+      }
+
+      command.push('-avoid_negative_ts', 'make_zero', outputName);
+      await ffmpeg.exec(command);
     }
 
-    if (height) {
-      filters.push(`scale=-1:${height}:force_original_aspect_ratio=decrease`);
+    // Çıktıyı oku
+    const data = await ffmpeg.readFile(outputName) as Uint8Array;
+
+    // Temizlik
+    await ffmpeg.deleteFile(inputName).catch(() => {});
+    await ffmpeg.deleteFile(outputName).catch(() => {});
+
+    // 0 byte kontrolü — FFmpeg.wasm büyük dosyalarda bazen boş çıktı üretir
+    if (!data || data.length === 0) {
+      throw new Error(`FFmpeg çıktısı boş (0 byte). Video kesme başarısız oldu (${startSecs}s - ${endSecs}s).`);
     }
 
-    const command = [
-      '-ss', startSecs.toString(),
-      '-i', inputName,
-      '-t', duration.toString(),
-      '-vf', filters.join(','),
-    ];
+    const blob = new Blob([new Uint8Array(data)], { type: 'video/mp4' });
+    return new File([blob], outputName, { type: 'video/mp4' });
+  } catch (err) {
+    // Hata durumunda temizlik dene
+    await ffmpeg.deleteFile(inputName).catch(() => {});
+    await ffmpeg.deleteFile(outputName).catch(() => {});
 
-    if (fps) {
-      command.push('-r', fps.toString());
-    }
+    // Herhangi bir hata durumunda FFmpeg'i sıfırla — sonraki işlem temiz başlasın
+    console.warn('FFmpeg hatası, instance sıfırlanıyor:', err instanceof Error ? err.message : err);
+    resetFFmpeg();
 
-    command.push('-avoid_negative_ts', 'make_zero', outputName);
-    await ffmpeg.exec(command);
+    throw err;
   }
+}
 
-  // Çıktıyı oku
-  const data = await ffmpeg.readFile(outputName) as Uint8Array;
-
-  // Temizlik
-  await ffmpeg.deleteFile(inputName);
-  await ffmpeg.deleteFile(outputName);
-
-  const blob = new Blob([new Uint8Array(data)], { type: 'video/mp4' });
-  return new File([blob], outputName, { type: 'video/mp4' });
+/**
+ * FFmpeg instance'ını sıfırlar. Bellek hatası sonrasında yeniden yükleme için kullanılır.
+ */
+export function resetFFmpeg(): void {
+  if (ffmpegInstance) {
+    try {
+      ffmpegInstance.terminate();
+    } catch (_) {
+      // terminate başarısız olabilir, yoksay
+    }
+  }
+  ffmpegInstance = null;
+  ffmpegLoading = null;
 }
