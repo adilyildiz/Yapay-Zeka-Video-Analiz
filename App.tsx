@@ -249,6 +249,154 @@ function loadModePreferences() {
 
 const chartModes = Object.keys(modes['Grafik'].subModes!);
 const categoricalModes = Object.keys(modes['Kategorik Süreç Transkripti'].subModes!);
+
+// Tüm subMode değerlerinden benzersiz kategori listesi çıkar
+const allPredefinedCategories: string[] = (() => {
+  const subModes = modes['Kategorik Süreç Transkripti'].subModes!;
+  const catSet = new Set<string>();
+  for (const key of Object.keys(subModes)) {
+    if (key === 'Özel') continue;
+    const val = subModes[key];
+    val.split(',').map((c: string) => c.trim()).filter(Boolean).forEach((c: string) => catSet.add(c));
+  }
+  return Array.from(catSet);
+})();
+
+// Select2 tarzı çoklu seçim bileşeni
+function CategoryMultiSelect({
+  selectedCategories,
+  onChange,
+  extraCategories = [],
+}: {
+  selectedCategories: string[];
+  onChange: (cats: string[]) => void;
+  extraCategories?: string[];
+}) {
+  const [searchText, setSearchText] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Birleşik kategori listesi: sabit + extra (transkript'ten gelen)
+  const mergedCategories = React.useMemo(() => {
+    const set = new Set<string>(allPredefinedCategories);
+    extraCategories.forEach((c) => { if (c) set.add(c); });
+    return Array.from(set);
+  }, [extraCategories]);
+
+  // Filtrelenmiş seçenekler
+  const filteredOptions = React.useMemo(() => {
+    const lower = searchText.toLowerCase().trim();
+    return mergedCategories
+      .filter((cat) => !selectedCategories.includes(cat))
+      .filter((cat) => !lower || cat.toLowerCase().includes(lower));
+  }, [searchText, selectedCategories, mergedCategories]);
+
+  // Dışarıya tıklandığında kapat
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleRemove = (cat: string) => {
+    onChange(selectedCategories.filter((c) => c !== cat));
+  };
+
+  const handleSelect = (cat: string) => {
+    if (!selectedCategories.includes(cat)) {
+      onChange([...selectedCategories, cat]);
+    }
+    setSearchText('');
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchText.trim()) {
+      e.preventDefault();
+      // Virgülle ayrılmış birden fazla kategori ekleyebilme
+      const newCats = searchText.split(',').map((c) => c.trim()).filter(Boolean);
+      const updated = [...selectedCategories];
+      for (const cat of newCats) {
+        if (!updated.includes(cat)) updated.push(cat);
+      }
+      onChange(updated);
+      setSearchText('');
+    } else if (e.key === 'Backspace' && !searchText && selectedCategories.length > 0) {
+      onChange(selectedCategories.slice(0, -1));
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  return (
+    <div className="category-multiselect" ref={containerRef}>
+      <div
+        className={c('category-multiselect-control', { open: isOpen })}
+        onClick={() => { setIsOpen(true); inputRef.current?.focus(); }}
+      >
+        <div className="category-tags-area">
+          {selectedCategories.map((cat) => (
+            <span key={cat} className="category-tag">
+              {cat}
+              <button
+                type="button"
+                className="category-tag-remove"
+                onClick={(e) => { e.stopPropagation(); handleRemove(cat); }}
+                aria-label={`${cat} kategorisini kaldır`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            ref={inputRef}
+            type="text"
+            className="category-search-input"
+            placeholder={selectedCategories.length === 0 ? 'Kategori ara veya ekle...' : 'Ara...'}
+            value={searchText}
+            onChange={(e) => { setSearchText(e.target.value); setIsOpen(true); }}
+            onFocus={() => setIsOpen(true)}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <span className="category-multiselect-arrow icon" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>
+          {isOpen ? 'expand_less' : 'expand_more'}
+        </span>
+      </div>
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="category-dropdown">
+          {filteredOptions.map((cat) => (
+            <div
+              key={cat}
+              className="category-dropdown-item"
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(cat); }}
+            >
+              {cat}
+            </div>
+          ))}
+        </div>
+      )}
+      {isOpen && filteredOptions.length === 0 && searchText.trim() && (
+        <div className="category-dropdown">
+          <div
+            className="category-dropdown-item category-dropdown-create"
+            onMouseDown={(e) => { e.preventDefault(); handleSelect(searchText.trim()); }}
+          >
+            <span className="icon" style={{ fontSize: '16px' }}>add</span>
+            &quot;{searchText.trim()}&quot; ekle
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type ModeKey = keyof typeof modes;
 
 // Tarayıcı bildirimi gönderme fonksiyonu
@@ -326,7 +474,7 @@ export default function App() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editStartTime, setEditStartTime] = useState<string>('');
   const [editEndTime, setEditEndTime] = useState<string>('');
-  const [editCategory, setEditCategory] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<string[]>([]);
   const [editDescription, setEditDescription] = useState<string>('');
   const [editLocation, setEditLocation] = useState<string>('');
   const [activeTranscriptIndex, setActiveTranscriptIndex] = useState<number>(-1);
@@ -336,7 +484,7 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [addStartTime, setAddStartTime] = useState<string>('');
   const [addEndTime, setAddEndTime] = useState<string>('');
-  const [addCategory, setAddCategory] = useState<string>('');
+  const [addCategory, setAddCategory] = useState<string[]>([]);
   const [addDescription, setAddDescription] = useState<string>('');
   const [addLocation, setAddLocation] = useState<string>('');
 
@@ -348,6 +496,20 @@ export default function App() {
   const transcriptItemRefs = useRef<Record<number, HTMLElement | null>>({});
   const suppressAutoScrollUntilRef = useRef<number>(0);
   const cancelAnalysisRef = useRef<boolean>(false);
+
+  // Transkript listesindeki benzersiz kategorileri çıkar
+  const extraCategoriesFromTranscript = React.useMemo(() => {
+    if (!timecodeList || timecodeList.length === 0) return [];
+    const catSet = new Set<string>();
+    for (const item of timecodeList) {
+      if (Array.isArray(item.category)) {
+        item.category.forEach((c: string) => { if (c) catSet.add(c); });
+      } else if (typeof item.category === 'string' && item.category) {
+        item.category.split(',').map((c: string) => c.trim()).filter(Boolean).forEach((c: string) => catSet.add(c));
+      }
+    }
+    return Array.from(catSet);
+  }, [timecodeList]);
   const isCustomMode = selectedMode === 'Özel';
   const isChartMode = selectedMode === 'Grafik';
   const isCategoricalMode = selectedMode === 'Kategorik Süreç Transkripti';
@@ -2035,7 +2197,7 @@ ${basePrompt}
     setEditingIndex(index);
     setEditStartTime(String(selected.startTime || selected.time || '').trim());
     setEditEndTime(String(selected.endTime || selected.startTime || selected.time || '').trim());
-    setEditCategory(category);
+    setEditCategory(category ? category.split(',').map((c: string) => c.trim()).filter(Boolean) : []);
     setEditDescription(description);
     setEditLocation(String(selected.location || '').trim());
     setAnalysisWarning(`✏️ Düzenleme modu açıldı (satır #${index + 1}).`);
@@ -2045,7 +2207,7 @@ ${basePrompt}
     setEditingIndex(null);
     setEditStartTime('');
     setEditEndTime('');
-    setEditCategory('');
+    setEditCategory([]);
     setEditDescription('');
     setEditLocation('');
   };
@@ -2067,8 +2229,9 @@ ${basePrompt}
     }
 
     const safeEndTime = endTime || startTime;
-    const normalizedCategory = parseCategoryInput(editCategory);
-    const updatedText = formatTranscriptText(editCategory, editDescription);
+    const editCategoryStr = editCategory.join(', ');
+    const normalizedCategory = parseCategoryInput(editCategoryStr);
+    const updatedText = formatTranscriptText(editCategoryStr, editDescription);
 
     const updatedList = [...timecodeList];
     updatedList[editingIndex] = {
@@ -2118,7 +2281,7 @@ ${basePrompt}
     const formattedNow = formatSecondsToHHMMSS(currentPlaybackTime);
     setAddStartTime(formattedNow);
     setAddEndTime(formattedNow);
-    setAddCategory('');
+    setAddCategory([]);
     setAddDescription('');
     setAddLocation('');
     setIsAddModalOpen(true);
@@ -2129,7 +2292,7 @@ ${basePrompt}
     setIsAddModalOpen(false);
     setAddStartTime('');
     setAddEndTime('');
-    setAddCategory('');
+    setAddCategory([]);
     setAddDescription('');
     setAddLocation('');
   };
@@ -2155,8 +2318,9 @@ ${basePrompt}
     }
 
     const safeEndTime = endTime || startTime;
-    const normalizedCategory = parseCategoryInput(addCategory);
-    const updatedText = formatTranscriptText(addCategory, description);
+    const addCategoryStr = addCategory.join(', ');
+    const normalizedCategory = parseCategoryInput(addCategoryStr);
+    const updatedText = formatTranscriptText(addCategoryStr, description);
 
     const newTimecode = {
       time: startTime,
@@ -3290,12 +3454,10 @@ ${basePrompt}
 
             <div className="time-input-group">
               <label htmlFor="edit-category">Kategori</label>
-              <input
-                id="edit-category"
-                type="text"
-                placeholder="Örn: go response, action points"
-                value={editCategory}
-                onChange={(e) => setEditCategory(e.target.value)}
+              <CategoryMultiSelect
+                selectedCategories={editCategory}
+                onChange={setEditCategory}
+                extraCategories={extraCategoriesFromTranscript}
               />
             </div>
 
@@ -3369,12 +3531,10 @@ ${basePrompt}
 
             <div className="time-input-group">
               <label htmlFor="add-category">Kategori</label>
-              <input
-                id="add-category"
-                type="text"
-                placeholder="Örn: go response, action points"
-                value={addCategory}
-                onChange={(e) => setAddCategory(e.target.value)}
+              <CategoryMultiSelect
+                selectedCategories={addCategory}
+                onChange={setAddCategory}
+                extraCategories={extraCategoriesFromTranscript}
               />
             </div>
 
