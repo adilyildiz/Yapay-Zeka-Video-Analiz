@@ -145,14 +145,41 @@ export async function sliceVideo(
     const height = options.height && options.height > 0 ? Math.floor(options.height) : null;
 
     if (!fps && !height) {
+      // Hızlı kesim — stream copy.
+      // -map_metadata 0: rotation dahil tüm metadata korunsun (dikey videolar için kritik)
       await ffmpeg.exec([
         '-ss', startSecs.toString(),
         '-i', inputName,
         '-t', duration.toString(),
         '-c', 'copy',
+        '-map_metadata', '0',
+        '-movflags', '+faststart',
         '-avoid_negative_ts', 'make_zero',
         outputName,
       ]);
+
+      // Stream copy 0 byte ürettiyse, re-encode ile tekrar dene
+      // (dikey/rotated videolarda stream copy bazen başarısız olur)
+      const copyData = await ffmpeg.readFile(outputName) as Uint8Array;
+      if (!copyData || copyData.length === 0) {
+        console.warn('Stream copy 0 byte üretti, re-encode ile tekrar deneniyor...');
+        await ffmpeg.deleteFile(outputName).catch(() => {});
+        await ffmpeg.exec([
+          '-ss', startSecs.toString(),
+          '-i', inputName,
+          '-t', duration.toString(),
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-crf', '23',
+          '-c:a', 'aac',
+          '-b:a', '128k',
+          '-pix_fmt', 'yuv420p',
+          '-map_metadata', '0',
+          '-movflags', '+faststart',
+          '-avoid_negative_ts', 'make_zero',
+          outputName,
+        ]);
+      }
     } else {
       const filters: string[] = [];
 
@@ -161,7 +188,13 @@ export async function sliceVideo(
       }
 
       if (height) {
-        filters.push(`scale=-2:${height}:force_original_aspect_ratio=decrease`);
+        // Hem yatay hem dikey videoları destekleyen scale filtresi:
+        // - Dikey video (ih > iw): genişliği height'a göre oranla, yüksekliği koru
+        // - Yatay video (iw >= ih): yüksekliği height'a ayarla, genişliği oranla
+        // - 2'ye bölünebilirlik: ceil ile sağla (codec uyumluluğu için gerekli)
+        filters.push(
+          `scale='if(gt(ih,iw),min(${height},iw),-2)':'if(gt(ih,iw),-2,min(${height},ih))'`
+        );
       }
 
       const command = [
@@ -169,6 +202,14 @@ export async function sliceVideo(
         '-i', inputName,
         '-t', duration.toString(),
         '-vf', filters.join(','),
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-pix_fmt', 'yuv420p',
+        '-map_metadata', '0',
+        '-movflags', '+faststart',
       ];
 
       if (fps) {
