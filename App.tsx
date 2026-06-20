@@ -2279,8 +2279,9 @@ ${basePrompt}
   // Yeni transkript manuel ekleme işlemleri
   const handleStartAddTimecode = () => {
     const formattedNow = formatSecondsToHHMMSS(currentPlaybackTime);
+    const formattedEnd = formatSecondsToHHMMSS(currentPlaybackTime + 1);
     setAddStartTime(formattedNow);
-    setAddEndTime(formattedNow);
+    setAddEndTime(formattedEnd);
     setAddCategory([]);
     setAddDescription('');
     setAddLocation('');
@@ -3389,6 +3390,17 @@ ${basePrompt}
           )}
         </div>
       </div>
+      
+      {/* Sürekli görünecek Yeni Transkript Ekleme butonu */}
+      <button
+        type="button"
+        className="button primary floating-add-btn"
+        onClick={handleStartAddTimecode}
+        title="Yeni Transkript Ekle"
+      >
+        <span className="icon">add</span>
+        Yeni Transkript Ekle
+      </button>
     </div>
   );
 

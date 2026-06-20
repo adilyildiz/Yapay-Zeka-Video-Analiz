@@ -3864,3 +3864,56 @@ video {
   color: var(--error) !important;
   transform: scale(1.05);
 }
+
+/* Floating Action Button (FAB) for adding new transcripts */
+.floating-add-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--primary);
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floating-add-btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.floating-add-btn:active {
+  transform: translateY(-1px) scale(0.98);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.floating-add-btn .icon {
+  font-size: 20px;
+  transition: transform 0.3s ease;
+}
+
+.floating-add-btn:hover .icon {
+  transform: rotate(90deg);
+}
+
+/* Adjust layout on small screens to make sure it doesn't block critical content */
+@media (max-width: 768px) {
+  .floating-add-btn {
+    bottom: 16px;
+    right: 16px;
+    padding: 10px 18px;
+    font-size: 13px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
+}
